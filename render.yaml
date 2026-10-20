@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: super-cubito-saltarin
+    runtime: node
+    plan: free
+    numInstances: 1
+    buildCommand: npm ci --no-fund && npm test
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: NODE_ENV
+        value: production

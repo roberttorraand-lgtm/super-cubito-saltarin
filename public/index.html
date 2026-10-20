@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Super Cubito Saltarín</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><a class="brand" href="/" aria-label="Inicio"><span class="logo">▧</span> CUBITO<span class="brand-sub">SALTARÍN</span></a><span class="tag">UN MUNDO POR SALTAR</span><span class="online"><i></i> COOPERATIVO ONLINE · 2–4</span></header>
+<main>
+<section class="intro"><div><p class="eyebrow">PEQUEÑOS CUBOS. GRANDES AVENTURAS.</p><h1>El siguiente salto,<br><em>mejor en compañía.</em></h1><p class="description">Reúne a tu equipo, encuentra el camino y llega hasta la bandera.<br>La aventura empieza con un pequeño salto.</p></div><div class="edition">01<span>EL PRIMER<br>ENCUENTRO</span></div></section>
+<section class="game-shell" aria-label="Juego">
+<div class="game-bar"><span><i class="dot"></i> MUNDO 01 <b>/</b> PRADERA DE LOS ENCUENTROS</span><span id="room-label">ESPERANDO A TU EQUIPO</span></div>
+<div class="stage">
+<canvas id="game" width="1200" height="675" aria-label="Nivel de plataformas cooperativo"></canvas>
+<div id="lobby" class="overlay"><div class="lobby-card"><span class="mini-cubes">▰ ▰</span><p class="eyebrow">TODO EMPIEZA AQUÍ</p><h2>Un salto en equipo.</h2><p>Crea una sala e invita a tus amigos con el código.<br>Podéis entrar desde distintos dispositivos.</p><form id="join-form"><label for="name">TU NOMBRE</label><input id="name" maxlength="18" placeholder="¿Cómo se llama tu cubito?" required autocomplete="nickname"><button id="create" type="submit">Crear una sala <span>↗</span></button><div class="separator">O ÚNETE A TUS AMIGOS</div><div class="join-row"><input id="code" maxlength="6" placeholder="CÓDIGO" aria-label="Código de sala" autocomplete="off"><button id="join" type="button">Entrar →</button></div></form><p id="error" role="status"></p></div></div>
+<div id="victory" class="overlay" hidden><div class="lobby-card"><p class="eyebrow">¡LO HABÉIS CONSEGUIDO!</p><h2>Juntos, hasta la meta.</h2><p>Primer nivel completado.<br>La historia y los nuevos mundos están por llegar.</p><button id="again">Volver al inicio ↗</button></div></div>
+<div id="touch" hidden><button data-key="ArrowLeft" aria-label="Mover a la izquierda">←</button><button data-key="ArrowRight" aria-label="Mover a la derecha">→</button><button data-key="Space" aria-label="Saltar">↑</button></div>
+</div>
+<div class="game-footer"><div id="players"><span class="muted">Tu equipo aparecerá aquí</span></div><button id="copy" hidden>Copiar invitación ↗</button><span id="status">CREA UNA SALA PARA EMPEZAR</span></div>
+</section>
+<section class="instructions"><div><span class="number">01</span><h3>Muévete a tu ritmo</h3><p><kbd>A</kbd> <kbd>D</kbd> o <kbd>←</kbd> <kbd>→</kbd> para moverte.<br><kbd>Espacio</kbd> o <kbd>↑</kbd> para saltar.</p></div><div><span class="number">02</span><h3>Nadie se queda atrás</h3><p>Si caes, vuelves a intentarlo.<br>La bandera verde guarda tu progreso.</p></div><div><span class="number">03</span><h3>La meta es de todos</h3><p>Jugad desde 2 hasta 4 cubitos.<br>El nivel termina cuando llegáis todos.</p></div></section>
+</main><footer><span>SUPER CUBITO SALTARÍN</span><span>HECHO PARA JUGAR JUNTOS · PROTOTIPO 0.1</span></footer>
+<script type="module" src="/app.js"></script>
+</body></html>
