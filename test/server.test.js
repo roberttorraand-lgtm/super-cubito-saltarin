@@ -50,6 +50,11 @@ test('real WebSocket rooms: synchronization, authoritative limits, isolation, ca
   const overflow=await client(welcome.room);assert.match((await wait(overflow,m=>m.type==='error')).message,/completa/);
   d.close();await once(d,'close');await wait(a,m=>m.type==='state'&&m.players.length===3);
   const missing=await client('ZZZZZZ');assert.match((await wait(missing,m=>m.type==='error')).message,/no existe/);
+  const jumper=await client();const joined=await wait(jumper,m=>m.type==='welcome');
+  await wait(jumper,m=>m.type==='state'&&m.players[0].grounded);
+  for(let seq=1;seq<=200;seq++)jumper.send(JSON.stringify({type:'input',revision:0,seq,jump:seq===1}));
+  const jump=await wait(jumper,m=>m.type==='state'&&m.players[0].y<joined.player.y-10);
+  assert.ok(jump.players[0].seq>=197,'burst backlog was discarded while its short jump survived');
   const forbidden=new WebSocket(`ws://127.0.0.1:${port}`,{origin:'https://different.example'});sockets.push(forbidden);
   assert.equal((await once(forbidden,'close'))[0],1008);
 });

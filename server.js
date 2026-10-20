@@ -3,12 +3,13 @@ import { readFile } from 'node:fs/promises';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { levels, newPlayer, tickGroup, STEP_MS } from './game.js';
+import { takeInput, queueInput } from './transport.js';
 import { createRoom, checkCompletion, voteNext } from './rooms.js';
 
 const files=new Map([['/',['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/game.js',['game.js','text/javascript']],['/netcode.js',['public/netcode.js','text/javascript']],['/renderer.js',['public/renderer.js','text/javascript']]]);
 const server=http.createServer(async(req,res)=>{
   let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{res.writeHead(400);return res.end();}
-  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.3.0"}');}
+  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.4.0"}');}
   const file=files.get(path);
   if(!file){res.writeHead(404);return res.end('No encontrado');}
   try{
@@ -19,11 +20,13 @@ const server=http.createServer(async(req,res)=>{
 const wss=new WebSocketServer({server,maxPayload:4096});
 const rooms=new Map();
 const colors=['#b4f669','#92bbff','#ffb591','#d3a6ff'];
-const send=(ws,data)=>{if(ws.readyState===WebSocket.OPEN&&ws.bufferedAmount<262144)ws.send(JSON.stringify(data));};
+// Control messages (especially level changes) must arrive even when old states are skipped.
+const send=(ws,data)=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(data));};
 function sendLevel(ws,type='level'){
   send(ws,{type,id:ws.player.id,room:ws.room.code,level:levels[ws.room.levelIndex],levelIndex:ws.room.levelIndex,totalLevels:levels.length,revision:ws.room.revision,world:ws.room.world,player:ws.player});
 }
 wss.on('connection',(ws,req)=>{
+  req.socket.setNoDelay(true);
   ws.on('error',()=>{});
   if(req.headers.origin){try{if(new URL(req.headers.origin).host!==req.headers.host)return ws.close(1008,'Origen no permitido');}catch{return ws.close(1008);}}
   ws.alive=true;ws.on('pong',()=>{ws.alive=true;});
@@ -37,8 +40,7 @@ wss.on('connection',(ws,req)=>{
       if(!Number.isSafeInteger(m.seq)||m.seq<=ws.receivedSeq||m.seq>ws.receivedSeq+300)return;
       ws.receivedSeq=m.seq;ws.lastInput=performance.now();
       // A client supplies intentions, never coordinates. At most one input is simulated per server step.
-      if(ws.queue.length>=30)ws.queue.shift();
-      ws.queue.push({seq:m.seq,left:m.left===true,right:m.right===true,jump:m.jump===true});return;
+      queueInput(ws.queue,{seq:m.seq,left:m.left===true,right:m.right===true,jump:m.jump===true},ws.player.jumpHeld);return;
     }
     if(m.type==='next'&&ws.player){
       if(m.revision!==ws.room.revision)return;
@@ -82,18 +84,18 @@ const loop=setInterval(()=>{
     accumulator-=STEP_MS;frame++;
     for(const room of rooms.values()){
       if(room.phase==='playing'){
-      for(const ws of room.clients){
-        const input=ws.queue.shift();
-        if(input){ws.player.input=input;ws.lastSeq=input.seq;}
-        else if(now-ws.lastInput>250)ws.player.input={left:false,right:false,jump:false};
-      }
-      tickGroup([...room.clients].map(ws=>ws.player),levels[room.levelIndex],room.world);
+        for(const ws of room.clients){
+          const input=takeInput(ws.queue,ws.player.jumpHeld);
+          if(input){ws.player.input=input;ws.lastSeq=input.seq;}
+          else if(now-ws.lastInput>250)ws.player.input={left:false,right:false,jump:false};
+        }
+        tickGroup([...room.clients].map(ws=>ws.player),levels[room.levelIndex],room.world);
       }
       checkCompletion(room);
-      if(frame%3!==0)continue;
+      if(frame%2!==0)continue;
       const players=[...room.clients].map(c=>({...c.player,seq:c.lastSeq}));
-      const state={type:'state',frame,revision:room.revision,players,phase:room.phase,ready:[...room.ready],world:room.world};
-      for(const ws of room.clients)send(ws,state);
+      const state=JSON.stringify({type:'state',frame,revision:room.revision,players,phase:room.phase,ready:[...room.ready],world:room.world});
+      for(const ws of room.clients)if(ws.readyState===WebSocket.OPEN&&ws.bufferedAmount<32768)ws.send(state);
     }
   }
 },4);

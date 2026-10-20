@@ -1,5 +1,5 @@
 import { levels, newPlayer, createWorld, STEP_MS } from '/game.js';
-import { prediction, predictFrame, interpolate } from '/netcode.js';
+import { prediction, predictFrame, interpolate, SnapshotTimeline, PeerPresentation } from '/netcode.js';
 import { Renderer } from '/renderer.js';
 const $=s=>document.querySelector(s);
 const renderer=new Renderer($('#game'));
@@ -8,6 +8,8 @@ let socket,id,level,room='',busy=false,revision=0,phase='playing',levelIndex=0;
 let players=[],local=null,previousLocal=null,pending=[],seq=0,accumulator=0,lastTime=performance.now();
 let correction={x:0,y:0},histories=new Map(),playerSignature='',ping=0,lastPing=0;
 let world=createWorld(),projectedWorld=createWorld(),ghosts=[];
+let timeline=new SnapshotTimeline();
+const peerPresentation=new PeerPresentation();
 const keys=new Set();
 $('#code').value=(new URLSearchParams(location.search).get('sala')||'').slice(0,6);
 function error(message){$('#error').textContent=message;}
@@ -15,7 +17,7 @@ function resetLevel(m){
   id=m.id;level=m.level;revision=m.revision;levelIndex=m.levelIndex;phase='playing';
   world=m.world??createWorld();projectedWorld=structuredClone(world);ghosts=[];
   local=m.player?structuredClone(m.player):newPlayer(id,$('#name').value,'#b4f669',level);previousLocal={...local};
-  pending=[];seq=0;correction={x:0,y:0};histories.clear();players=[];keys.clear();accumulator=0;
+  pending=[];seq=0;correction={x:0,y:0};histories.clear();peerPresentation.clear();timeline=new SnapshotTimeline();players=[];keys.clear();accumulator=0;
   renderer.setLevel(level);$('#victory').hidden=true;$('#next').disabled=false;
   $('#level-label').textContent=`MUNDO ${String(levelIndex+1).padStart(2,'0')} / ${level.name.toUpperCase()}`;
   $('#level-info').textContent=`${levelIndex+1} / ${m.totalLevels} · ${level.subtitle}`;
@@ -24,22 +26,25 @@ function resetLevel(m){
 function updateState(m){
   if(m.revision!==revision)return;
   players=m.players;phase=m.phase;world=m.world??createWorld();
-  const now=performance.now(),authoritative=players.find(p=>p.id===id);
+  const now=performance.now();timeline.push(m.frame,now);
+  const authoritative=players.find(p=>p.id===id);
   if(authoritative){
     pending=pending.filter(frame=>frame.seq>authoritative.seq);
     const result=prediction(authoritative,phase==='playing'?pending:[],level,world,players.filter(p=>p.id!==id));
-    const corrected=result.state;ghosts=result.ghosts;projectedWorld=result.world;
+    const corrected=result.state;peerPresentation.rebase(ghosts,result.ghosts);ghosts=result.ghosts;projectedWorld=result.world;
     if(local&&local.deaths===corrected.deaths&&Math.hypot(local.x-corrected.x,local.y-corrected.y)<150&&phase==='playing'){
       correction.x+=local.x-corrected.x;correction.y+=local.y-corrected.y;
     }else correction={x:0,y:0};
-    local=corrected;previousLocal={...local};
+    const continuous=local&&previousLocal&&local.deaths===corrected.deaths&&phase==='playing';
+    const dx=continuous?local.x-previousLocal.x:0,dy=continuous?local.y-previousLocal.y:0;
+    local=corrected;previousLocal={...local,x:local.x-dx,y:local.y-dy};
   }
-  const connected=new Set(players.map(p=>p.id));
+  const connected=new Set(players.map(p=>p.id));peerPresentation.retain(connected);
   for(const key of histories.keys())if(!connected.has(key))histories.delete(key);
   for(const p of players){
     if(p.id===id)continue;
-    const history=histories.get(p.id)||[];history.push({time:now,player:p});
-    if(history.length>12)history.shift();histories.set(p.id,history);
+    const history=histories.get(p.id)||[];history.push({time:m.frame*1000/60,player:p});
+    if(history.length>24)history.shift();histories.set(p.id,history);
   }
   const signature=players.map(p=>`${p.id}:${p.finished}`).join('|');
   if(signature!==playerSignature){
@@ -135,17 +140,18 @@ function draw(now){
   }else accumulator=0;
   correction.x*=Math.exp(-14*dt);correction.y*=Math.exp(-14*dt);
   const visible=[];
+  const remoteTime=timeline.render(now);
   if(id&&local){
     const alpha=accumulator/STEP_MS;
     const snap=local.deaths!==previousLocal?.deaths||phase!=='playing';
     visible.push({...local,x:snap?local.x:previousLocal.x+(local.x-previousLocal.x)*alpha+correction.x,y:snap?local.y:previousLocal.y+(local.y-previousLocal.y)*alpha+correction.y});
     for(const history of histories.values()){
-      let p=interpolate(history,now-100);
+      let p=interpolate(history,remoteTime),mode='snapshot';
       const ghost=ghosts.find(g=>g.id===p?.id);
-      if(ghost&&(local.supportId===ghost.id||ghost.supportId===id||Math.hypot(local.x-ghost.x,local.y-ghost.y)<90))p=ghost;
-      if(p)visible.push(p);
+      if(ghost&&(local.supportId===ghost.id||ghost.supportId===id||Math.hypot(local.x-ghost.x,local.y-ghost.y)<90)){p=ghost;mode='contact';}
+      if(p)visible.push(peerPresentation.sample(p,mode,now));
     }
-    if(now-lastPing>3000){lastPing=now;socket.send(JSON.stringify({type:'ping',sent:now}));}
+    if(now-lastPing>1500){lastPing=now;socket.send(JSON.stringify({type:'ping',sent:now}));}
   }else visible.push({...newPlayer('demo','Tu aventura empieza aquí','#b4f669'),grounded:true});
   renderer.draw(visible,id,now/1000,dt,world);
   requestAnimationFrame(draw);
