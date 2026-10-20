@@ -4,12 +4,12 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { levels, newPlayer, tickGroup, STEP_MS } from './game.js';
 import { takeInput, queueInput } from './transport.js';
-import { createRoom, checkCompletion, voteNext } from './rooms.js';
+import { createRoom, checkCompletion, voteNext, voteRestart } from './rooms.js';
 
-const files=new Map([['/',['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/game.js',['game.js','text/javascript']],['/levels.js',['levels.js','text/javascript']],['/netcode.js',['public/netcode.js','text/javascript']],['/renderer.js',['public/renderer.js','text/javascript']]]);
+const files=new Map([['/',['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/game.js',['game.js','text/javascript']],['/levels.js',['levels.js','text/javascript']],['/netcode.js',['public/netcode.js','text/javascript']],['/renderer.js',['public/renderer.js','text/javascript']],['/assets/meme-atlas.png',['public/assets/meme-atlas.png','image/png']]]);
 const server=http.createServer(async(req,res)=>{
   let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{res.writeHead(400);return res.end();}
-  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.5.0"}');}
+  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.6.0"}');}
   const file=files.get(path);
   if(!file){res.writeHead(404);return res.end('No encontrado');}
   try{
@@ -42,6 +42,11 @@ wss.on('connection',(ws,req)=>{
       // A client supplies intentions, never coordinates. At most one input is simulated per server step.
       queueInput(ws.queue,{seq:m.seq,left:m.left===true,right:m.right===true,jump:m.jump===true},ws.player.jumpHeld);return;
     }
+    if(m.type==='restart'&&ws.player){
+      if(m.revision!==ws.room.revision)return;
+      if(voteRestart(ws.room,ws.player.id))for(const c of ws.room.clients)sendLevel(c);
+      return;
+    }
     if(m.type==='next'&&ws.player){
       if(m.revision!==ws.room.revision)return;
       if(voteNext(ws.room,ws.player.id))for(const c of ws.room.clients)sendLevel(c);
@@ -69,11 +74,12 @@ wss.on('connection',(ws,req)=>{
   });
   ws.on('close',()=>{
     if(!ws.room)return;
-    const room=ws.room;room.clients.delete(ws);room.ready.delete(ws.player.id);
+    const room=ws.room;room.clients.delete(ws);room.ready.delete(ws.player.id);room.restartReady.delete(ws.player.id);
     if(!room.clients.size)rooms.delete(room.code);
     else{
       checkCompletion(room);
       if(room.ready.size&&voteNext(room,[...room.ready][0]))for(const c of room.clients)sendLevel(c);
+      else if(room.restartReady.size&&voteRestart(room,[...room.restartReady][0]))for(const c of room.clients)sendLevel(c);
     }
   });
 });
@@ -94,7 +100,7 @@ const loop=setInterval(()=>{
       checkCompletion(room);
       if(frame%2!==0)continue;
       const players=[...room.clients].map(c=>({...c.player,seq:c.lastSeq}));
-      const state=JSON.stringify({type:'state',frame,revision:room.revision,players,phase:room.phase,ready:[...room.ready],world:room.world});
+      const state=JSON.stringify({type:'state',frame,revision:room.revision,players,phase:room.phase,ready:[...room.ready],restartReady:[...room.restartReady],world:room.world});
       for(const ws of room.clients)if(ws.readyState===WebSocket.OPEN&&ws.bufferedAmount<32768)ws.send(state);
     }
   }

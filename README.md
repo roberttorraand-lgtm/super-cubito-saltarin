@@ -1,6 +1,6 @@
 # Super Cubito Saltarín
 
-Plataformas cooperativo online para 2–4 jugadores. Cuatro recorridos diseñados individualmente en `levels.js`, cada uno con geometría, ambientación y obstáculos propios:
+Plataformas cooperativo online para 2–4 jugadores, ahora con **3 vidas por mundo**, 24 enemigos absurdos, memes PNG, muelles y cintas transportadoras. Cuatro recorridos diseñados individualmente en `levels.js`, cada uno con geometría, ambientación y obstáculos propios:
 
 | Mundo | Retos propios |
 | --- | --- |
@@ -26,6 +26,9 @@ Crea una sala y comparte su invitación. Los demás abren la misma dirección p�
 - A/D o flechas para moverse; espacio, W o flecha arriba para saltar.
 - Mantén el salto para llegar más alto; suéltalo antes para dar un salto corto.
 - Hay controles táctiles y un botón de pantalla completa cuando el navegador lo permite.
+- Cada jugador empieza cada mundo con **3 vidas**. Una caída o un golpe consume una; reapareces en tu último punto de control con 1,5 segundos de protección frente a contactos.
+- Con cero vidas pasas a espectador y la cámara sigue a un compañero vivo. Los supervivientes pueden completar el mundo y todos recuperan tres vidas al pasar al siguiente.
+- Si todos quedan KO, el equipo debe votar para reintentar el mismo mundo con tres vidas nuevas. También se puede acordar el reinicio si un compañero está fuera y lo necesitáis para un mecanismo.
 - Los cubitos chocan entre sí. Salta y aterriza sobre un compañero para formar una torre; el de abajo puede transportar a los de arriba. En la meta dejan de bloquear a los demás.
 - En el bosque, un muro de 156 píxeles requiere saltar desde otro cubito. Quien lo cruza pisa la placa del otro lado para abrir el paso al resto.
 - En el cañón y la luna, ocupad dos placas distintas durante 12 pasos de simulación (aproximadamente 0,2 segundos) para construir cada puente. En el glaciar, dos placas derriten la barrera inicial.
@@ -33,8 +36,10 @@ Crea una sala y comparte su invitación. Los demás abren la misma dirección p�
 - Las sierras del cañón recorren raíles y obligan a calcular el salto.
 - En el glaciar frena antes de llegar al borde. El hielo frágil se rompe 42 pasos después de pisarlo y vuelve tras 180 pasos (tres segundos), cuando no hay un cubito dentro.
 - En la luna el salto dura más. Las barreras de energía alternan 80 pasos activas y 100 apagadas; su estado aparece en el escenario.
-- Las banderas intermedias guardan tu punto de reaparición en ese mundo.
-- Se requieren al menos dos jugadores conectados para completar un mundo. Deben llegar todos a la meta y marcarse como listos para pasar juntos al siguiente.
+- Capibaras con gafas, tostadoras voladoras, plátanos astronautas y patos musculosos patrullan los mapas. Saltarles encima los derrota para toda la sala; un contacto lateral consume una vida.
+- Los muelles `BOING.EXE` lanzan al cubito sin gastar vidas. Las cintas del cañón empujan al jugador en sentido contrario.
+- Las banderas intermedias guardan tu punto de reaparición en ese mundo; no recuperan vidas.
+- Se requieren al menos dos jugadores conectados para completar un mundo. Deben llegar a la meta todos los jugadores que siguen con vidas y marcarse todos como listos para pasar juntos al siguiente.
 - Tras el cuarto mundo, el equipo puede reiniciar la aventura en la misma sala.
 
 ## Fluidez y sincronización
@@ -53,7 +58,7 @@ El renderizado usa `requestAnimationFrame`, cámara con suavizado independiente 
 npm test
 ```
 
-Las pruebas cubren física, altura de salto, tolerancia de entrada, puntos de control, recorrido completo de los cuatro mundos con dos actores usando entradas legales, resolución de muros y puentes, apilamiento y transporte de cuatro cubitos, choques contra paredes, desaparición de un soporte, activación de placas por compañeros distintos, sierras móviles, diferencias de tracción y gravedad, rotura y restauración del hielo, pulsos de energía, correspondencia entre física del servidor y predicción, progresión y reinicio cooperativos, reconciliación, interpolación, conexiones WebSocket reales, aislamiento de salas, límite de cuatro jugadores, validación de origen y disponibilidad HTTP. Las pruebas de red cubren además ráfagas de entradas, conservación de pulsaciones cortas, reloj monotónico con variaciones de retraso, interpolación a 30 Hz y transiciones suaves al entrar en contacto. No se requieren servicios externos.
+Las pruebas cubren física, altura de salto, tolerancia de entrada, puntos de control, recorrido completo de los cuatro mundos con dos actores usando entradas legales, resolución de muros y puentes, apilamiento y transporte de cuatro cubitos, choques contra paredes, desaparición de un soporte, activación de placas por compañeros distintos, sierras móviles, diferencias de tracción y gravedad, rotura y restauración del hielo, pulsos de energía, correspondencia entre física del servidor y predicción, progresión y reinicio cooperativos, reconciliación, interpolación, conexiones WebSocket reales, aislamiento de salas, límite de cuatro jugadores, validación de origen y disponibilidad HTTP. Las pruebas de red cubren además ráfagas de entradas, conservación de pulsaciones cortas, reloj monotónico con variaciones de retraso, interpolación a 30 Hz y transiciones suaves al entrar en contacto. También se comprueban agotamiento exacto de tres vidas, modo espectador, reinicio por consenso, restauración de vidas en cada mundo, combate con enemigos y servicio del PNG. No se requieren servicios externos.
 
 Comprobaciones de navegador: crear una sala en un contexto, unirse desde otro, comprobar ambos nombres, mover y saltar, entrar y salir de pantalla completa y repetir con controles táctiles. Para validar latencia, introducir 125 ms de retraso en cada sentido del WebSocket: el movimiento local debe dibujarse antes de la confirmación y converger a la posición del servidor al detenerse.
 
@@ -61,4 +66,8 @@ Comprobaciones de navegador: crear una sala en un contexto, unirse desde otro, c
 
 `render.yaml` configura un único servicio Node en Render, con instalación y pruebas antes de arrancar y comprobación `/health`. El despliegue requiere **WebSockets persistentes** y una sola instancia. En otros proveedores, usa HTTPS/WSS y configura el proxy para permitir la actualización WebSocket y pasar el host público. Comparte la dirección pública del alojamiento. Una dirección localhost solo sirve para pruebas locales.
 
-Las salas viven en memoria: un reinicio o despliegue interrumpe las partidas. No hay reconexión automática, cuentas ni guardado permanente. La historia y los power-ups quedan para una próxima versión. El plan gratuito de Render puede entrar en reposo cuando no hay uso; la siguiente carga tardará más mientras arranca el servidor.
+Las salas viven en memoria: un reinicio o despliegue interrumpe las partidas. No hay reconexión automática, cuentas ni guardado permanente. Las vidas están asociadas al jugador conectado a la sala; no existe identidad persistente entre sesiones. La historia y los power-ups quedan para una próxima versión. El plan gratuito de Render puede entrar en reposo cuando no hay uso; la siguiente carga tardará más mientras arranca el servidor.
+
+## Imágenes de memes
+
+`public/assets/meme-atlas.png` contiene cuatro recortes originales generados para este juego, con fondo transparente. El renderizador dibuja cada cuadrante directamente: no necesita enlaces externos ni descargar imágenes durante la partida. Las posiciones y animaciones de los enemigos se calculan a partir del reloj compartido del mundo; las derrotas las confirma el servidor. Los carteles son decorativos y los enemigos tienen colisión.

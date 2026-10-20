@@ -1,4 +1,4 @@
-import { solidRects, sawPositions } from '../game.js';
+import { solidRects, sawPositions, enemyPositions } from '../game.js';
 const idle=()=>({left:false,right:false,jump:false});
 function seek(p,target){
   const desired=Math.max(-4,Math.min(4,(target-p.x)*.22));
@@ -15,7 +15,8 @@ function route(p,map,world){
       const saw=sawPositions(map,world).some(h=>h.x-p.x<115&&h.x-p.x>0&&Math.abs(p.y+32-h.y)<65);
       const block=(map.blocks??[]).some(b=>b.rect[0]>p.x&&b.rect[0]-p.x<92&&p.y+32>b.rect[1]);
       const laser=(map.lasers??[]).some(l=>l.x>p.x&&l.x-p.x<150);
-      jump=gap<94||spike||saw||block||laser;
+      const enemy=enemyPositions(map,world).some(e=>e.kind!=='toaster'&&e.x+e.w>p.x&&e.x-p.x<110&&e.x-p.x>0&&Math.abs(p.y+32-e.y)<90);
+      jump=gap<94||spike||saw||block||laser||enemy;
     }
   }
   return {left:false,right:true,jump};

@@ -5,17 +5,22 @@ import { levels } from './levels.js';
 export { levels };
 export const level = levels[0];
 export function newPlayer(id,name,color,map=level,spawnSlot=0){
-  return {id,name,color,...map.spawn,x:map.spawn.x+spawnSlot*44,spawnSlot,vx:0,vy:0,grounded:false,checkpoint:-1,finished:false,deaths:0,
+  return {id,name,color,...map.spawn,x:map.spawn.x+spawnSlot*44,spawnSlot,vx:0,vy:0,grounded:false,checkpoint:-1,finished:false,deaths:0,lives:3,eliminated:false,invulnerable:0,
     input:{left:false,right:false,jump:false},jumpHeld:false,coyote:0,jumpBuffer:0,facing:1,supportId:null};
 }
-export function isComplete(players){return players.length>=2&&players.every(p=>p.finished);}
+export function isComplete(players){return players.length>=2&&players.some(p=>p.finished)&&players.every(p=>p.finished||p.eliminated);}
 export function respawn(p,map){
+  if(p.eliminated)return;
+  p.deaths++;p.lives=Math.max(0,(p.lives??3)-1);
+  p.vx=p.vy=0;p.supportId=null;p.grounded=false;p.coyote=0;p.jumpBuffer=0;
+  if(p.lives===0){p.eliminated=true;p.y=Math.min(map.height-40,p.y);return;}
   const point=map.checkpoints[p.checkpoint];
   p.x=point?.x??(map.spawn.x+(p.spawnSlot??0)*44);p.y=point?point.y-SIZE:map.spawn.y;
-  p.vx=p.vy=0;p.supportId=null;p.grounded=false;p.coyote=0;p.jumpBuffer=0;p.deaths++;
+  p.invulnerable=90;
 }
 export function tick(p,map=level,world=null){
-  if(p.finished)return;
+  if(p.finished||p.eliminated)return;
+  p.invulnerable=Math.max(0,(p.invulnerable??0)-1);
   const direction=Number(p.input.right)-Number(p.input.left);
   const icy=p.grounded&&!p.supportId&&(map.iceRegions??[]).some(r=>p.x+16>=r.x&&p.x+16<r.x+r.w);
   const acceleration=p.grounded?(icy?.3:.95):.6;
@@ -31,10 +36,11 @@ export function tick(p,map=level,world=null){
   p.vy=Math.min(p.vy+(map.gravity??.62),17);
   const solids=solidRects(map,world);
   p.supportId=null;
-  p.x=Math.max(0,Math.min(map.width-SIZE,p.x+p.vx));
+  const moveX=p.vx+(p.grounded?beltSpeed(p,map):0);
+  p.x=Math.max(0,Math.min(map.width-SIZE,p.x+moveX));
   for(const [x,y,w,h] of solids){
     if(p.x+SIZE>x&&p.x<x+w&&p.y+SIZE>y&&p.y<y+h){
-      if(p.vx>0)p.x=x-SIZE;else if(p.vx<0)p.x=x+w;
+      if(moveX>0)p.x=x-SIZE;else if(moveX<0)p.x=x+w;
       p.vx=0;
     }
   }
@@ -45,14 +51,16 @@ export function tick(p,map=level,world=null){
       else if(p.vy<0&&oldY>=y+h-1){p.y=y+h;p.vy=0;}
     }
   }
-  if(p.y>map.height+100||hitsHazard(p,map,world))respawn(p,map);
+  if(p.y>map.height+100||!p.invulnerable&&hitsHazard(p,map,world))respawn(p,map);
+  if(p.eliminated)return;
+  for(const spring of map.springs??[])if(p.grounded&&p.x+SIZE>spring.x&&p.x<spring.x+spring.w&&Math.abs(p.y+SIZE-spring.y)<3){p.vy=-17;p.grounded=false;p.coyote=0;}
   map.checkpoints.forEach((point,i)=>{
     if(i>p.checkpoint&&p.x>point.x-25&&p.x<point.x+70&&Math.abs(p.y+SIZE-point.y)<12)p.checkpoint=i;
   });
-  if(p.x>map.goal.x-20&&Math.abs(p.y+SIZE-map.goal.y)<45){p.finished=true;p.vx=p.vy=0;}
+  if(p.grounded&&p.x>map.goal.x-20&&Math.abs(p.y+SIZE-map.goal.y)<45){p.finished=true;p.vx=p.vy=0;}
 }
 
-export function createWorld(){return {frame:0,activated:[],charge:{},pressed:[],crumble:{}};}
+export function createWorld(){return {frame:0,activated:[],charge:{},pressed:[],crumble:{},defeatedEnemies:[]};}
 export function solidRects(map,world){
   const active=world?.activated??[];
   return [...map.platforms,...(map.blocks??[]).map(b=>b.rect),...(map.crumble??[]).filter(b=>crumbleActive(b,world)).map(b=>b.rect),...(map.gates??[]).filter(g=>!active.includes(g.id)).map(g=>g.rect),
@@ -69,7 +77,7 @@ export function updateMechanisms(players,map,world){
   const plates=map.plates??[];world.pressed=[];
   const occupants=new Map();
   for(const plate of plates){
-    const ids=players.filter(p=>!p.finished&&p.grounded&&Math.abs(p.y+SIZE-plate.y)<3&&p.x+SIZE>plate.x+3&&p.x<plate.x+plate.w-3).map(p=>p.id);
+    const ids=players.filter(p=>!p.finished&&!p.eliminated&&p.grounded&&Math.abs(p.y+SIZE-plate.y)<3&&p.x+SIZE>plate.x+3&&p.x<plate.x+plate.w-3).map(p=>p.id);
     occupants.set(plate.id,ids);if(ids.length)world.pressed.push(plate.id);
   }
   for(const group of new Set(plates.map(p=>p.group))){
@@ -89,7 +97,7 @@ export function resolvePlayers(players,previous,map,world){
   // Transport a supported teammate horizontally; vertical motion is resolved below.
   for(const p of ordered){
     const old=previous.get(p.id),support=players.find(other=>other.id===old?.supportId);
-    if(!support||p.finished||p.deaths!==old.deaths||p.vy<0)continue;
+    if(!support||support.eliminated||support.finished||p.finished||p.eliminated||p.deaths!==old.deaths||p.vy<0)continue;
     const before=previous.get(support.id);
     if(!before||support.deaths!==before.deaths)continue;
     const x=p.x+support.x-before.x;
@@ -97,7 +105,7 @@ export function resolvePlayers(players,previous,map,world){
   }
   for(let pass=0;pass<4;pass++)for(let i=0;i<ordered.length;i++)for(let j=i+1;j<ordered.length;j++){
     const a=ordered[i],b=ordered[j];
-    if(a.finished||b.finished||a.x+SIZE<=b.x+.001||b.x+SIZE<=a.x+.001||a.y+SIZE<=b.y+.001||b.y+SIZE<=a.y+.001)continue;
+    if(a.finished||b.finished||a.eliminated||b.eliminated||a.x+SIZE<=b.x+.001||b.x+SIZE<=a.x+.001||a.y+SIZE<=b.y+.001||b.y+SIZE<=a.y+.001)continue;
     const pa=previous.get(a.id)??a,pb=previous.get(b.id)??b;
     const land=(top,bottom,oldTop,oldBottom)=>{
       if(oldTop.deaths!==top.deaths||oldBottom.deaths!==bottom.deaths||oldTop.y+SIZE>oldBottom.y+3||top.vy<bottom.vy)return false;
@@ -120,7 +128,8 @@ export function tickGroup(players,map,world,{mechanisms=true}={}){
   for(const p of players)tick(p,map,world);
   resolvePlayers(players,previous,map,world);
   // Collision displacement can move a cube onto a hazard too.
-  for(const p of players)if(!p.finished&&hitsHazard(p,map,world))respawn(p,map);
+  for(const p of players)if(!p.finished&&!p.eliminated&&!p.invulnerable&&hitsHazard(p,map,world))respawn(p,map);
+  updateEnemies(players,previous,map,world);
   if(mechanisms){updateMechanisms(players,map,world);updateCrumble(players,map,world);}
 }
 
@@ -134,11 +143,11 @@ export function updateCrumble(players,map,world){
   const state=world.crumble[tile.id];
   if(state&&world.frame>=state.restoreAt){
    const [x,y,w,h]=tile.rect;
-   if(!players.some(p=>p.x+SIZE>x&&p.x<x+w&&p.y+SIZE>y&&p.y<y+h))delete world.crumble[tile.id];
+   if(!players.some(p=>!p.eliminated&&p.x+SIZE>x&&p.x<x+w&&p.y+SIZE>y&&p.y<y+h))delete world.crumble[tile.id];
   }
   if(world.crumble[tile.id])continue;
   const [x,y,w]=tile.rect;
-  if(players.some(p=>!p.finished&&p.grounded&&Math.abs(p.y+SIZE-y)<3&&p.x+SIZE>x&&p.x<x+w)){
+  if(players.some(p=>!p.finished&&!p.eliminated&&p.grounded&&Math.abs(p.y+SIZE-y)<3&&p.x+SIZE>x&&p.x<x+w)){
    world.crumble[tile.id]={breakAt:world.frame+tile.delay,restoreAt:world.frame+tile.delay+tile.restore};
   }
  }
@@ -152,4 +161,27 @@ export function hitsHazard(p,map,world){
  return map.spikes.some(([x,y,w,h])=>p.x+SIZE>x&&p.x<x+w&&p.y+SIZE>y&&p.y<y+h)
   ||sawPositions(map,world).some(h=>circleHits(p,h))
   ||laserRects(map,world).some(([x,y,w,h])=>p.x+SIZE>x&&p.x<x+w&&p.y+SIZE>y&&p.y<y+h);
+}
+
+export function beltSpeed(p,map){
+ const belt=(map.belts??[]).find(b=>p.x+16>b.x&&p.x+16<b.x+b.w&&Math.abs(p.y+SIZE-b.y)<3);
+ return belt?.speed??0;
+}
+export function enemyPositions(map,world){
+ const frame=world?.frame??0,defeated=world?.defeatedEnemies??[];
+ return (map.enemies??[]).filter(e=>!defeated.includes(e.id)).map(e=>{
+  const phase=(frame+e.offset)/e.period*Math.PI*2;
+  return {...e,x:e.x+Math.sin(phase)*e.range,y:e.y+(e.kind==='toaster'?Math.sin(phase*1.5)*12:e.kind==='banana'?-Math.abs(Math.sin(phase))*45:0),facing:Math.cos(phase)>0?1:-1};
+ });
+}
+export function updateEnemies(players,previous,map,world){
+ world.defeatedEnemies??=[];
+ for(const enemy of enemyPositions(map,world))for(const p of players){
+  if(p.finished||p.eliminated||world.defeatedEnemies.includes(enemy.id))continue;
+  if(p.x+SIZE<=enemy.x||p.x>=enemy.x+enemy.w||p.y+SIZE<=enemy.y||p.y>=enemy.y+enemy.h)continue;
+  const old=previous.get(p.id);
+  if(old&&old.deaths===p.deaths&&p.vy>=0&&old.y+SIZE<=enemy.y+12){
+   world.defeatedEnemies.push(enemy.id);p.y=enemy.y-SIZE;p.vy=-9;p.grounded=false;p.supportId=null;
+  }else if(!p.invulnerable)respawn(p,map);
+ }
 }

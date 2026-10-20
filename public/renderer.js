@@ -1,7 +1,8 @@
-import { sawPositions, crumbleActive } from '/game.js';
+import { sawPositions, crumbleActive, enemyPositions } from '/game.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export class Renderer {
   constructor(canvas){
+    this.atlas=new Image();this.atlasReady=false;this.atlas.onload=()=>{this.atlasReady=true;};this.atlas.src='/assets/meme-atlas.png';
     this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});this.camera=0;
     this.visuals=new Map();this.particles=[];this.layers=[];this.reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.w=1;this.h=1;
@@ -37,7 +38,8 @@ export class Renderer {
   draw(players,localId,time,dt,world={frame:0,activated:[],pressed:[],charge:{}}){
     const l=this.level;if(!l||this.w<1||this.h<1)return;
     const ctx=this.ctx,t=l.theme,scale=this.h/720,view=this.w/scale;
-    const me=players.find(p=>p.id===localId);
+    const own=players.find(p=>p.id===localId);
+    const me=own?.eliminated?(players.find(p=>!p.eliminated&&!p.finished)??players.find(p=>!p.eliminated)??own):own;
     const target=clamp((me?.x??120)-view*.36+(me?.vx??0)*12,0,Math.max(0,l.width-view));
     if(me&&Math.abs(target-this.camera)>view*1.2)this.camera=target;
     else this.camera+=(target-this.camera)*(1-Math.exp(-7*dt));
@@ -101,10 +103,12 @@ export class Renderer {
       for(let dx=0;dx<w;dx+=16){ctx.fillStyle='#d76e78';ctx.beginPath();ctx.moveTo(x+dx,y+h);ctx.lineTo(x+dx+8,y);ctx.lineTo(x+dx+16,y+h);ctx.fill();ctx.fillStyle='#ffc3b0';ctx.beginPath();ctx.moveTo(x+dx+8,y);ctx.lineTo(x+dx+8,y+h);ctx.lineTo(x+dx,y+h);ctx.fill();}
     }
     this.mechanisms(l,world,time,left,right);
+    this.chaos(l,world,time,left,right);
     l.checkpoints.forEach((point,i)=>{if(point.x>left&&point.x<right)this.flag(point.x,point.y,i<=(me?.checkpoint??-1)?'#b4f669':'#ffffffaa',time,'GUARDAR PROGRESO');});
     if(l.goal.x>left&&l.goal.x<right)this.flag(l.goal.x,l.goal.y,t.accent,time,'META DEL EQUIPO',true);
     const alive=new Set(players.map(p=>p.id));for(const key of this.visuals.keys())if(!alive.has(key))this.visuals.delete(key);
     for(const p of players){
+      if(p.eliminated)continue;
       let a=this.visuals.get(p.id);
       if(!a){a={grounded:p.grounded,deaths:p.deaths,checkpoint:p.checkpoint,sx:1,sy:1,trail:0};this.visuals.set(p.id,a);}
       if(p.deaths!==a.deaths){this.burst(p.x+16,p.y+16,p.color,18);a.sx=.65;a.sy=1.3;}
@@ -116,7 +120,7 @@ export class Renderer {
       a.trail+=dt;if(p.grounded&&Math.abs(p.vx)>2&&a.trail>.09){this.burst(p.x+16,p.y+32,'#ffffff88',1);a.trail=0;}
       if(p.x+32<left||p.x>right)continue;
       ctx.fillStyle='#172f3826';ctx.beginPath();ctx.ellipse(p.x+16,p.y+35,19,4,0,0,Math.PI*2);ctx.fill();
-      ctx.save();ctx.translate(p.x+16,p.y+32);
+      ctx.save();ctx.translate(p.x+16,p.y+32);if(p.invulnerable>0&&Math.floor(time*12)%2)ctx.globalAlpha=.4;
       if(!this.reduced){const stretch=p.grounded?0:clamp(-p.vy*.009,-.07,.11);ctx.scale(a.sx-stretch,a.sy+stretch);ctx.rotate(p.vx*.012);}
       const breathe=this.reduced?0:Math.sin(time*3+p.x*.01)*.6;
       ctx.translate(0,breathe);ctx.fillStyle=p.color;ctx.beginPath();ctx.roundRect(-16,-32,32,32,7);ctx.fill();
@@ -219,6 +223,40 @@ export class Renderer {
       ctx.save();ctx.translate(saw.x,saw.y);ctx.rotate(this.reduced?0:time*5);ctx.fillStyle='#f27a80';ctx.strokeStyle='#ffe4c2';ctx.lineWidth=2;ctx.beginPath();
       for(let i=0;i<32;i++){const angle=i/32*Math.PI*2,r=i%2?saw.radius-4:saw.radius+2;const x=Math.cos(angle)*r,y=Math.sin(angle)*r;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.closePath();ctx.fill();ctx.stroke();
       ctx.fillStyle='#4e6274';ctx.beginPath();ctx.arc(0,0,5,0,Math.PI*2);ctx.fill();ctx.restore();
+    }
+  }
+  sprite(kind,x,y,w,h,flip=false){
+    const ctx=this.ctx,index={capy:0,toaster:1,banana:2,duck:3}[kind]??0;
+    if(!this.atlasReady){ctx.fillStyle=['#ad8266','#aabcc9','#f2d26e','#ffd861'][index];ctx.fillRect(x+6,y+6,w-12,h-12);return;}
+    const side=this.atlas.width/2;
+    ctx.save();ctx.translate(x+(flip?w:0),y);if(flip)ctx.scale(-1,1);
+    ctx.drawImage(this.atlas,index%2*side,Math.floor(index/2)*side,side,side,0,0,w,h);ctx.restore();
+  }
+  chaos(map,world,time,left,right){
+    const ctx=this.ctx;
+    for(const meme of map.memes??[]){
+      if(meme.x+85<left||meme.x-85>right)continue;
+      ctx.save();ctx.translate(meme.x,meme.y);ctx.rotate(this.reduced?0:Math.sin(time*.5+meme.x)*.025);
+      ctx.fillStyle='#faf8ec';ctx.beginPath();ctx.roundRect(-69,-19,138,148,6);ctx.fill();ctx.strokeStyle='#334d5b';ctx.lineWidth=3;ctx.stroke();
+      this.sprite(meme.kind,-61,-5,122,106);
+      ctx.font='900 12px Impact,Arial,sans-serif';ctx.textAlign='center';ctx.strokeStyle='#233345';ctx.lineWidth=3;ctx.strokeText(meme.caption,0,119,126);ctx.fillStyle='#fff';ctx.fillText(meme.caption,0,119,126);ctx.restore();
+    }
+    for(const belt of map.belts??[]){
+      if(belt.x+belt.w<left||belt.x>right)continue;
+      ctx.fillStyle='#35495b';ctx.fillRect(belt.x,belt.y-6,belt.w,8);ctx.fillStyle='#ffc56f';
+      for(let dx=0;dx<belt.w;dx+=23){const xx=belt.x+((dx+time*belt.speed*24)%belt.w+belt.w)%belt.w;ctx.beginPath();ctx.moveTo(xx+7,belt.y-13);ctx.lineTo(xx,belt.y-8);ctx.lineTo(xx+7,belt.y-3);ctx.fill();}
+    }
+    for(const spring of map.springs??[]){
+      if(spring.x+spring.w<left||spring.x>right)continue;
+      ctx.strokeStyle='#6c5b9b';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(spring.x+8,spring.y);ctx.lineTo(spring.x+30,spring.y-5);ctx.lineTo(spring.x+8,spring.y-10);ctx.lineTo(spring.x+30,spring.y-15);ctx.stroke();
+      ctx.fillStyle='#ff9dde';ctx.fillRect(spring.x,spring.y-19,spring.w,5);ctx.fillStyle='#345368';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText('BOING.EXE',spring.x+spring.w/2,spring.y-28);
+    }
+    const names={capy:'CAPIBARA DEL DRIP',toaster:'TOSTADORA AIRLINES',banana:'PLÁTANO ESPACIAL',duck:'PATO GYM BRO'};
+    for(const enemy of enemyPositions(map,world)){
+      if(enemy.x+enemy.w<left||enemy.x>right)continue;
+      const wobble=this.reduced?0:Math.sin(time*8+enemy.x)*2;
+      this.sprite(enemy.kind,enemy.x-12,enemy.y-20+wobble,enemy.w+24,enemy.h+24,enemy.facing<0);
+      ctx.fillStyle='#ffffffdd';ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText(names[enemy.kind],enemy.x+enemy.w/2,enemy.y-23);
     }
   }
   flag(x,y,color,time,label,goal=false){

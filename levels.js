@@ -57,4 +57,20 @@ const moon=route(3,'Constelación de los saltos','Gravedad suave y pulsos de ene
 moon.gravity=.38;
 bridgePuzzle(moon,2,'stars','stars');
 for(const i of [5,7,9]){const [x,y,w]=moon.platforms[i];moon.lasers.push({id:`pulse-${i}`,x:x+250,y:y-110,w:20,h:110,period:180,on:80,offset:i*31});}
+// Fixed seeds keep the absurdity identical for everybody in the room.
+function addEnemy(map,island,kind,offsetX=180){
+ const [x,y,w]=map.platforms[island];
+ map.enemies??=[];
+ map.enemies.push({id:`${map.id}-${kind}-${island}`,kind,x:x+Math.min(offsetX,w-100),y:y-(kind==='toaster'?130:kind==='duck'?36:32),w:kind==='duck'?40:34,h:kind==='duck'?36:32,range:kind==='toaster'?35:22,period:220+island*11,offset:island*37});
+}
+for(const [i,kind,x] of [[2,'toaster',180],[3,'duck',290],[5,'toaster',180],[7,'toaster',210],[9,'banana',160],[11,'toaster',520]])addEnemy(forest,i,kind,x);
+for(const [i,kind,x] of [[2,'duck',350],[4,'banana',200],[6,'capy',340],[7,'toaster',220],[9,'toaster',250],[10,'toaster',540]])addEnemy(canyon,i,kind,x);
+for(const [i,kind,x] of [[1,'capy',210],[3,'duck',280],[4,'toaster',250],[6,'banana',200],[7,'toaster',280],[9,'duck',480]])addEnemy(ice,i,kind,x);
+for(const [i,kind,x] of [[1,'toaster',230],[2,'capy',210],[3,'toaster',220],[4,'banana',120],[6,'toaster',290],[8,'toaster',300]])addEnemy(moon,i,kind,x);
+for(const map of [forest,canyon,ice,moon]){
+ const last=map.platforms.at(-1);
+ map.springs=[{x:last[0]+100,y:last[1],w:44}];
+ map.memes=map.platforms.filter((_,i)=>i>0&&i%2===0).map(([x,y,w],i)=>({x:x+w*.65,y:y-230,kind:['capy','toaster','banana','duck'][(i+map.id)%4],caption:['NO ERA POR AHÍ','SKILL ISSUE','¿TODO BIEN, EQUIPO?','FÍSICA: CONFÍA','EL PATO TE JUZGA'][(i+map.id)%5]}));
+}
+canyon.belts=[4,6].map(i=>({x:canyon.platforms[i][0]+60,y:canyon.platforms[i][1],w:120,speed:-1.2}));
 export const levels=[forest,canyon,ice,moon];

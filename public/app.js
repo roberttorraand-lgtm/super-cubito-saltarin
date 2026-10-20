@@ -18,7 +18,7 @@ function resetLevel(m){
   world=m.world??createWorld();projectedWorld=structuredClone(world);ghosts=[];
   local=m.player?structuredClone(m.player):newPlayer(id,$('#name').value,'#b4f669',level);previousLocal={...local};
   pending=[];seq=0;correction={x:0,y:0};histories.clear();peerPresentation.clear();timeline=new SnapshotTimeline();players=[];keys.clear();accumulator=0;
-  renderer.setLevel(level);$('#victory').hidden=true;$('#next').disabled=false;
+  renderer.setLevel(level);$('#victory').hidden=true;$('#restart-panel').hidden=true;$('#next').disabled=false;
   $('#level-label').textContent=`MUNDO ${String(levelIndex+1).padStart(2,'0')} / ${level.name.toUpperCase()}`;
   $('#level-info').textContent=`${levelIndex+1} / ${m.totalLevels} · ${level.subtitle}`;
   $('#level-info').classList.remove('announce');void $('#level-info').offsetWidth;$('#level-info').classList.add('announce');
@@ -46,22 +46,32 @@ function updateState(m){
     const history=histories.get(p.id)||[];history.push({time:m.frame*1000/60,player:p});
     if(history.length>24)history.shift();histories.set(p.id,history);
   }
-  const signature=players.map(p=>`${p.id}:${p.finished}`).join('|');
+  const signature=players.map(p=>`${p.id}:${p.finished}:${p.lives}:${p.eliminated}`).join('|');
   if(signature!==playerSignature){
     playerSignature=signature;
     $('#players').replaceChildren(...players.map(p=>{
       const el=document.createElement('span');el.className='player';
       const swatch=document.createElement('i');swatch.className='swatch';swatch.style.backgroundColor=p.color;
-      el.append(swatch,document.createTextNode(p.name+(p.id===id?' (tú)':'')+(p.finished?' ✓':'')));return el;
+      el.append(swatch,document.createTextNode(p.name+(p.id===id?' (tú)':'')+(p.eliminated?' · KO':p.finished?' ✓':` · ♥${p.lives??3}`)));return el;
     }));
   }
+  const lives=authoritative?.lives??3;
+  const heartText='♥'.repeat(lives)+'♡'.repeat(3-lives);
+  if($('#hearts').textContent!==heartText)$('#hearts').textContent=heartText;
+  $('#life-label').textContent=authoritative?.eliminated?'ESPECTADOR':`${lives} / 3 VIDAS`;
+  $('#restart-panel').hidden=phase!=='playing'||!players.some(p=>p.eliminated);
+  const restartVoted=(m.restartReady??[]).includes(id);
+  $('#restart-description').textContent=authoritative?.eliminated?'Sin vidas. Observa a tu equipo o acordad reiniciar este mundo.':'Un compañero está sin vidas. Podéis continuar o votar para reiniciar el mundo.';
+  $('#restart').disabled=restartVoted;
+  $('#restart').textContent=restartVoted?`Voto enviado (${m.restartReady.length}/${players.length})`:'Reiniciar mundo juntos';
   $('#victory').hidden=phase==='playing';
   if(phase!=='playing'){
-    const final=phase==='complete';
-    $('#victory-title').textContent=final?'¡Cuatro mundos, un equipo!':'¡Nivel superado!';
-    $('#victory-description').textContent=final?'Habéis completado toda la aventura. ¿Otra vuelta juntos?':`Siguiente parada: ${levels[levelIndex+1].name}.`;
-    const ready=m.ready.includes(id);$('#next').disabled=ready;
-    $('#next').textContent=ready?`Esperando al equipo (${m.ready.length}/${players.length})`:(final?'Volver a jugar juntos ↗':'Listo para el siguiente mundo ↗');
+    const final=phase==='complete',lost=phase==='defeated';
+    $('#victory-eyebrow').textContent=lost?'SE ACABARON LAS VIDAS':'¡LO HABÉIS CONSEGUIDO!';
+    $('#victory-title').textContent=lost?'El meme os ganó.':final?'¡Cuatro mundos, un equipo!':'¡Nivel superado!';
+    $('#victory-description').textContent=lost?'Votad todos para repetir este mundo con tres vidas nuevas.':final?'Habéis sobrevivido al caos. ¿Otra vuelta juntos?':`Siguiente parada: ${levels[levelIndex+1].name}. Todos recuperáis 3 vidas.`;
+    const votes=lost?(m.restartReady??[]):m.ready,ready=votes.includes(id);$('#next').disabled=ready;
+    $('#next').textContent=ready?`Esperando al equipo (${votes.length}/${players.length})`:(lost?'Reintentar este mundo · 3 vidas':final?'Volver a jugar juntos ↗':'Siguiente mundo · 3 vidas ↗');
   }
   const objective=(level.objectives??[]).find(o=>!world.activated.includes(o.group));
   const pads=objective?level.plates.filter(p=>p.group===objective.group):[];
@@ -70,7 +80,7 @@ function updateState(m){
   const movementTip=level.id===2?'Hielo: frena con tiempo y no te detengas sobre los puentes frágiles.':level.id===3?'Gravedad lunar: mantén el salto y calcula los pulsos de energía.':level.subtitle;
   const instruction=hint??`${levelIndex+1} / ${levels.length} · ${movementTip}`;
   if($('#level-info').textContent!==instruction)$('#level-info').textContent=instruction;
-  $('#status').textContent=local?.finished?'EN LA META · ESPERANDO AL EQUIPO':players.length<2?'INVITA A ALGUIEN PARA COMPLETAR EL NIVEL':hint??(local?.checkpoint>=0?'PUNTO DE CONTROL GUARDADO':'¡JUNTOS HASTA LA BANDERA!');
+  $('#status').textContent=local?.eliminated?'SIN VIDAS · MODO ESPECTADOR':local?.finished?'EN LA META · ESPERANDO AL EQUIPO':players.length<2?'INVITA A ALGUIEN PARA COMPLETAR EL NIVEL':hint??(local?.checkpoint>=0?'PUNTO DE CONTROL GUARDADO':'¡JUNTOS HASTA LA BANDERA!');
 }
 function connect(joinExisting){
   if(busy)return;
@@ -86,7 +96,7 @@ function connect(joinExisting){
     if(m.type==='error'){error(m.message);socket.close();return;}
     if(m.type==='welcome'){
       clearTimeout(timeout);resetLevel(m);room=m.room;busy=false;
-      $('#lobby').hidden=true;$('#copy').hidden=false;$('#fullscreen').hidden=false;
+      $('#lobby').hidden=true;$('#life-hud').hidden=false;$('#copy').hidden=false;$('#fullscreen').hidden=false;
       $('#touch').hidden=!(matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0);
       $('#room-label').textContent=`SALA ${room} · 2–4 JUGADORES`;
       history.replaceState(null,'',`?sala=${room}`);
@@ -103,7 +113,7 @@ function connect(joinExisting){
     if(id){
       id=null;players=[];level=null;local=null;pending=[];histories.clear();keys.clear();playerSignature='';
       renderer.setLevel(levels[0]);$('#players').textContent='Tu equipo aparecerá aquí';
-      $('#lobby').hidden=false;$('#victory').hidden=true;$('#touch').hidden=true;$('#copy').hidden=true;$('#fullscreen').hidden=true;
+      $('#lobby').hidden=false;$('#life-hud').hidden=true;$('#restart-panel').hidden=true;$('#victory').hidden=true;$('#touch').hidden=true;$('#copy').hidden=true;$('#fullscreen').hidden=true;
       $('#code').value=room;$('#room-label').textContent='CONEXIÓN INTERRUMPIDA';$('#connection').textContent='Sin conexión';
       error('Se ha perdido la conexión. Pulsa Entrar para volver a tu sala.');
     }else if($('#error').textContent==='Conectando…')error('No se pudo conectar con el servidor. Inténtalo de nuevo.');
@@ -112,7 +122,8 @@ function connect(joinExisting){
 }
 $('#join-form').addEventListener('submit',e=>{e.preventDefault();connect(false);});
 $('#join').addEventListener('click',()=>connect(true));
-$('#next').addEventListener('click',()=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'next',revision}));});
+$('#next').addEventListener('click',()=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:phase==='defeated'?'restart':'next',revision}));});
+$('#restart').addEventListener('click',()=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'restart',revision}));});
 $('#copy').addEventListener('click',async()=>{
   try{await navigator.clipboard.writeText(location.href);$('#copy').textContent='¡Invitación copiada!';setTimeout(()=>$('#copy').textContent='Copiar invitación ↗',2000);}
   catch{$('#status').textContent=`COMPARTE LA DIRECCIÓN DE ESTA PÁGINA · SALA ${room}`;}

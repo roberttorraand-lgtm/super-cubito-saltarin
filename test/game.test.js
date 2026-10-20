@@ -28,12 +28,10 @@ test('coyote time and buffered jump tolerate slightly early or late input',()=>{
   tick(q,flat);assert.equal(q.grounded,true);tick(q,flat);assert.ok(q.vy<0,'buffered jump fires just after landing');
 });
 test('checkpoint respawn is safe and preserves the latest checkpoint',()=>{
-  for(const map of levels){
-    const p=newPlayer('p','','',map);
-    map.checkpoints.forEach((cp,i)=>{p.x=cp.x;p.y=cp.y-32;p.vy=0;tick(p,map);assert.equal(p.checkpoint,i);p.y=850;tick(p,map);assert.equal(p.x,cp.x);assert.equal(p.y,cp.y-32);});
-    assert.equal(p.deaths,map.checkpoints.length);
-    p.y=900;tick(p,map);assert.equal(p.deaths,map.checkpoints.length+1);
-  }
+ for(const map of levels)map.checkpoints.forEach((cp,i)=>{
+  const p=newPlayer('p','','',map);p.checkpoint=i;p.y=900;tick(p,map);
+  assert.equal(p.x,cp.x);assert.equal(p.y,cp.y-32);assert.equal(p.deaths,1);assert.equal(p.lives,2);
+ });
 });
 for(const map of levels)test(`two players can solve every mechanism and finish: ${map.name}`,()=>{
   const players=[newPlayer('a','Climber','#fff',map),newPlayer('b','Base','#fff',map)];
