@@ -1,5 +1,5 @@
-import { levels, newPlayer, tick, STEP_MS } from '/game.js';
-import { reconcile, interpolate } from '/netcode.js';
+import { levels, newPlayer, createWorld, STEP_MS } from '/game.js';
+import { prediction, predictFrame, interpolate } from '/netcode.js';
 import { Renderer } from '/renderer.js';
 const $=s=>document.querySelector(s);
 const renderer=new Renderer($('#game'));
@@ -7,12 +7,14 @@ renderer.setLevel(levels[0]);
 let socket,id,level,room='',busy=false,revision=0,phase='playing',levelIndex=0;
 let players=[],local=null,previousLocal=null,pending=[],seq=0,accumulator=0,lastTime=performance.now();
 let correction={x:0,y:0},histories=new Map(),playerSignature='',ping=0,lastPing=0;
+let world=createWorld(),projectedWorld=createWorld(),ghosts=[];
 const keys=new Set();
 $('#code').value=(new URLSearchParams(location.search).get('sala')||'').slice(0,6);
 function error(message){$('#error').textContent=message;}
 function resetLevel(m){
   id=m.id;level=m.level;revision=m.revision;levelIndex=m.levelIndex;phase='playing';
-  local=newPlayer(id,$('#name').value,'#b4f669',level);previousLocal={...local};
+  world=m.world??createWorld();projectedWorld=structuredClone(world);ghosts=[];
+  local=m.player?structuredClone(m.player):newPlayer(id,$('#name').value,'#b4f669',level);previousLocal={...local};
   pending=[];seq=0;correction={x:0,y:0};histories.clear();players=[];keys.clear();accumulator=0;
   renderer.setLevel(level);$('#victory').hidden=true;$('#next').disabled=false;
   $('#level-label').textContent=`MUNDO ${String(levelIndex+1).padStart(2,'0')} / ${level.name.toUpperCase()}`;
@@ -21,11 +23,12 @@ function resetLevel(m){
 }
 function updateState(m){
   if(m.revision!==revision)return;
-  players=m.players;phase=m.phase;
+  players=m.players;phase=m.phase;world=m.world??createWorld();
   const now=performance.now(),authoritative=players.find(p=>p.id===id);
   if(authoritative){
     pending=pending.filter(frame=>frame.seq>authoritative.seq);
-    const corrected=reconcile(authoritative,phase==='playing'?pending:[],level);
+    const result=prediction(authoritative,phase==='playing'?pending:[],level,world,players.filter(p=>p.id!==id));
+    const corrected=result.state;ghosts=result.ghosts;projectedWorld=result.world;
     if(local&&local.deaths===corrected.deaths&&Math.hypot(local.x-corrected.x,local.y-corrected.y)<150&&phase==='playing'){
       correction.x+=local.x-corrected.x;correction.y+=local.y-corrected.y;
     }else correction={x:0,y:0};
@@ -55,7 +58,10 @@ function updateState(m){
     const ready=m.ready.includes(id);$('#next').disabled=ready;
     $('#next').textContent=ready?`Esperando al equipo (${m.ready.length}/${players.length})`:(final?'Volver a jugar juntos ↗':'Listo para el siguiente mundo ↗');
   }
-  $('#status').textContent=local?.finished?'EN LA META · ESPERANDO AL EQUIPO':players.length<2?'INVITA A ALGUIEN PARA COMPLETAR EL NIVEL':local?.checkpoint>=0?'PUNTO DE CONTROL GUARDADO':'¡JUNTOS HASTA LA BANDERA!';
+  const hint=!world.activated.includes('tower')&&local?.x<570?'HACED UNA TORRE · ABRID EL PASO DESDE EL OTRO LADO':!world.activated.includes('bridge')&&Math.abs((level.bridges?.[0]?.rect[0]??Infinity)-(local?.x??0))<650?'DOS CUBITOS EN LAS DOS PLACAS · CONSTRUID EL PUENTE':null;
+  const instruction=hint?(world.activated.includes('tower')?'Puente: un cubito sobre cada placa hasta que se iluminen.':'Haced una torre: saltad desde un compañero y pisad la placa al otro lado.'):`${levelIndex+1} / ${levels.length} · ${level.subtitle}`;
+  if($('#level-info').textContent!==instruction)$('#level-info').textContent=instruction;
+  $('#status').textContent=local?.finished?'EN LA META · ESPERANDO AL EQUIPO':players.length<2?'INVITA A ALGUIEN PARA COMPLETAR EL NIVEL':hint??(local?.checkpoint>=0?'PUNTO DE CONTROL GUARDADO':'¡JUNTOS HASTA LA BANDERA!');
 }
 function connect(joinExisting){
   if(busy)return;
@@ -122,7 +128,7 @@ function draw(now){
     while(accumulator>=STEP_MS){
       accumulator-=STEP_MS;previousLocal={...local};
       const input={type:'input',revision,seq:++seq,left:keys.has('ArrowLeft')||keys.has('KeyA'),right:keys.has('ArrowRight')||keys.has('KeyD'),jump:keys.has('Space')||keys.has('ArrowUp')||keys.has('KeyW')};
-      local.input=input;tick(local,level);pending.push(input);
+      local.input=input;predictFrame(local,ghosts,level,projectedWorld);pending.push(input);
       if(pending.length>120)pending.shift();
       if(socket.bufferedAmount<65536)socket.send(JSON.stringify(input));
     }
@@ -133,10 +139,15 @@ function draw(now){
     const alpha=accumulator/STEP_MS;
     const snap=local.deaths!==previousLocal?.deaths||phase!=='playing';
     visible.push({...local,x:snap?local.x:previousLocal.x+(local.x-previousLocal.x)*alpha+correction.x,y:snap?local.y:previousLocal.y+(local.y-previousLocal.y)*alpha+correction.y});
-    for(const history of histories.values()){const p=interpolate(history,now-100);if(p)visible.push(p);}
+    for(const history of histories.values()){
+      let p=interpolate(history,now-100);
+      const ghost=ghosts.find(g=>g.id===p?.id);
+      if(ghost&&(local.supportId===ghost.id||ghost.supportId===id||Math.hypot(local.x-ghost.x,local.y-ghost.y)<90))p=ghost;
+      if(p)visible.push(p);
+    }
     if(now-lastPing>3000){lastPing=now;socket.send(JSON.stringify({type:'ping',sent:now}));}
   }else visible.push({...newPlayer('demo','Tu aventura empieza aquí','#b4f669'),grounded:true});
-  renderer.draw(visible,id,now/1000,dt);
+  renderer.draw(visible,id,now/1000,dt,world);
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);

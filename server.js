@@ -2,13 +2,13 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
-import { levels, newPlayer, tick, STEP_MS } from './game.js';
+import { levels, newPlayer, tickGroup, STEP_MS } from './game.js';
 import { createRoom, checkCompletion, voteNext } from './rooms.js';
 
 const files=new Map([['/',['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/game.js',['game.js','text/javascript']],['/netcode.js',['public/netcode.js','text/javascript']],['/renderer.js',['public/renderer.js','text/javascript']]]);
 const server=http.createServer(async(req,res)=>{
   let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{res.writeHead(400);return res.end();}
-  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.2.0"}');}
+  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.3.0"}');}
   const file=files.get(path);
   if(!file){res.writeHead(404);return res.end('No encontrado');}
   try{
@@ -21,7 +21,7 @@ const rooms=new Map();
 const colors=['#b4f669','#92bbff','#ffb591','#d3a6ff'];
 const send=(ws,data)=>{if(ws.readyState===WebSocket.OPEN&&ws.bufferedAmount<262144)ws.send(JSON.stringify(data));};
 function sendLevel(ws,type='level'){
-  send(ws,{type,id:ws.player.id,room:ws.room.code,level:levels[ws.room.levelIndex],levelIndex:ws.room.levelIndex,totalLevels:levels.length,revision:ws.room.revision});
+  send(ws,{type,id:ws.player.id,room:ws.room.code,level:levels[ws.room.levelIndex],levelIndex:ws.room.levelIndex,totalLevels:levels.length,revision:ws.room.revision,world:ws.room.world,player:ws.player});
 }
 wss.on('connection',(ws,req)=>{
   ws.on('error',()=>{});
@@ -59,7 +59,8 @@ wss.on('connection',(ws,req)=>{
     }
     const used=new Set([...room.clients].map(c=>c.player.color));
     const name=(typeof m.name==='string'?m.name:'').replace(/[\x00-\x1f]/g,'').trim().slice(0,18)||'Cubito';
-    ws.player=newPlayer(randomUUID(),name,colors.find(c=>!used.has(c)),levels[room.levelIndex]);ws.room=room;
+    const color=colors.find(c=>!used.has(c));
+    ws.player=newPlayer(randomUUID(),name,color,levels[room.levelIndex],colors.indexOf(color));ws.room=room;
     // A late joiner can play the current level, including after the others reached its flag.
     if(room.phase!=='playing'){room.phase='playing';room.ready.clear();}
     room.clients.add(ws);sendLevel(ws,'welcome');
@@ -80,16 +81,18 @@ const loop=setInterval(()=>{
   while(accumulator>=STEP_MS){
     accumulator-=STEP_MS;frame++;
     for(const room of rooms.values()){
-      if(room.phase==='playing')for(const ws of room.clients){
+      if(room.phase==='playing'){
+      for(const ws of room.clients){
         const input=ws.queue.shift();
         if(input){ws.player.input=input;ws.lastSeq=input.seq;}
         else if(now-ws.lastInput>250)ws.player.input={left:false,right:false,jump:false};
-        tick(ws.player,levels[room.levelIndex]);
+      }
+      tickGroup([...room.clients].map(ws=>ws.player),levels[room.levelIndex],room.world);
       }
       checkCompletion(room);
       if(frame%3!==0)continue;
-      const players=[...room.clients].map(c=>({...c.player,input:undefined,seq:c.lastSeq}));
-      const state={type:'state',frame,revision:room.revision,players,phase:room.phase,ready:[...room.ready]};
+      const players=[...room.clients].map(c=>({...c.player,seq:c.lastSeq}));
+      const state={type:'state',frame,revision:room.revision,players,phase:room.phase,ready:[...room.ready],world:room.world};
       for(const ws of room.clients)send(ws,state);
     }
   }

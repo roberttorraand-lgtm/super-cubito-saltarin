@@ -34,9 +34,11 @@ test('real WebSocket rooms: synchronization, authoritative limits, isolation, ca
   a.send(JSON.stringify({type:'next',revision:0}));
   a.send(JSON.stringify({type:'input',seq:1,revision:99,right:true}));
   assert.equal((await wait(a,m=>m.type==='state')).revision,0);
+  const start=await wait(a,m=>m.type==='state'&&m.players.length===2);
+  const initialX=start.players.find(p=>p.id===welcome.id).x;
   // Flooded frames cannot move a player faster than the server's fixed simulation.
   for(let seq=1;seq<=200;seq++)a.send(JSON.stringify({type:'input',seq,revision:0,right:true,x:6000,finished:true}));
-  const moved=await wait(b,m=>m.type==='state'&&m.players.find(p=>p.id===welcome.id)?.x>105);
+  const moved=await wait(b,m=>m.type==='state'&&m.players.find(p=>p.id===welcome.id)?.x>initialX+2);
   const p=moved.players.find(p=>p.id===welcome.id);
   assert.ok(p.x<300);assert.equal(p.finished,false);assert.ok(p.seq>0);
   a.send(JSON.stringify({type:'input',seq:1,revision:0,left:true}));

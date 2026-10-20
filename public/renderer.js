@@ -1,3 +1,4 @@
+import { sawPositions } from '/game.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export class Renderer {
   constructor(canvas){
@@ -31,7 +32,7 @@ export class Renderer {
     if(this.reduced)return;
     for(let i=0;i<count&&this.particles.length<120;i++)this.particles.push({x,y,vx:(Math.random()-.5)*150,vy:-Math.random()*140-10,life:.4+Math.random()*.35,color,size:2+Math.random()*4});
   }
-  draw(players,localId,time,dt){
+  draw(players,localId,time,dt,world={frame:0,activated:[],pressed:[],charge:{}}){
     const l=this.level;if(!l||this.w<1||this.h<1)return;
     const ctx=this.ctx,t=l.theme,scale=this.h/720,view=this.w/scale;
     const me=players.find(p=>p.id===localId);
@@ -86,6 +87,7 @@ export class Renderer {
       if(x+w<left||x>right)continue;
       for(let dx=0;dx<w;dx+=16){ctx.fillStyle='#d76e78';ctx.beginPath();ctx.moveTo(x+dx,y+h);ctx.lineTo(x+dx+8,y);ctx.lineTo(x+dx+16,y+h);ctx.fill();ctx.fillStyle='#ffc3b0';ctx.beginPath();ctx.moveTo(x+dx+8,y);ctx.lineTo(x+dx+8,y+h);ctx.lineTo(x+dx,y+h);ctx.fill();}
     }
+    this.mechanisms(l,world,time,left,right);
     l.checkpoints.forEach((point,i)=>{if(point.x>left&&point.x<right)this.flag(point.x,point.y,i<=(me?.checkpoint??-1)?'#b4f669':'#ffffffaa',time,'GUARDAR PROGRESO');});
     if(l.goal.x>left&&l.goal.x<right)this.flag(l.goal.x,l.goal.y,t.accent,time,'META DEL EQUIPO',true);
     const alive=new Set(players.map(p=>p.id));for(const key of this.visuals.keys())if(!alive.has(key))this.visuals.delete(key);
@@ -124,6 +126,59 @@ export class Renderer {
     for(const cp of l.checkpoints){ctx.fillStyle='#ffffff66';ctx.fillRect(mx+cp.x/l.width*mw,29,2,11);}
     for(const p of players){ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(mx+p.x/l.width*mw,34,p.id===localId?5:3.5,0,Math.PI*2);ctx.fill();}
     ctx.fillStyle=t.accent;ctx.fillRect(mx+mw-2,27,3,12);
+  }
+  mechanisms(map,world,time,left,right){
+    const ctx=this.ctx,active=world.activated??[],pressed=world.pressed??[];
+    const label=(text,x,y)=>{ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillStyle=map.id===3?'#f0e4ff':'#274853';ctx.fillText(text,x,y);};
+    for(const gate of map.gates??[]){
+      const [x,y,w,h]=gate.rect;if(x+w<left||x>right)continue;
+      const open=active.includes(gate.id);
+      ctx.fillStyle='#263f5b';ctx.fillRect(x-5,y-5,w+10,7);ctx.fillRect(x-5,y-5,5,h+5);ctx.fillRect(x+w,y-5,5,h+5);
+      if(!open){
+        const gradient=ctx.createLinearGradient(x,0,x+w,0);gradient.addColorStop(0,'#547b8a');gradient.addColorStop(.5,'#91bec0');gradient.addColorStop(1,'#45667e');ctx.fillStyle=gradient;ctx.fillRect(x,y,w,h);
+        for(let yy=y+15;yy<y+h;yy+=25){ctx.fillStyle='#d4eded88';ctx.fillRect(x+4,yy,w-8,4);}
+        ctx.fillStyle='#f6d477';ctx.fillRect(x+w/2-5,y+h/2-8,10,16);
+      }else{
+        ctx.strokeStyle='#b8f58d';ctx.setLineDash([4,7]);ctx.strokeRect(x+5,y+7,w-10,h-9);ctx.setLineDash([]);
+      }
+      label(open?'PASO ABIERTO':'TORRE DE DOS CUBITOS',x+20,y-20);
+      if(!open){
+        ctx.strokeStyle='#edfbd5';ctx.lineWidth=2;ctx.strokeRect(x-64,y+h-26,22,22);ctx.strokeRect(x-64,y+h-50,22,22);
+        ctx.fillStyle='#edfbd5';ctx.fillText('↑',x-53,y+h-58);
+      }
+    }
+    for(const bridge of map.bridges??[]){
+      const [x,y,w,h]=bridge.rect;if(x+w<left||x>right)continue;
+      const open=active.includes(bridge.id);
+      if(open){
+        ctx.fillStyle='#674f65';ctx.fillRect(x,y+8,w,h-8);
+        for(let dx=0;dx<w;dx+=24){ctx.fillStyle=dx%48?'#c8a17c':'#e7c89a';ctx.fillRect(x+dx,y,22,12);}
+        ctx.strokeStyle='#ffe7b3';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y-24);ctx.quadraticCurveTo(x+w/2,y+5,x+w,y-24);ctx.stroke();
+        for(const xx of [x+4,x+w-8]){ctx.fillStyle='#8b6e6b';ctx.fillRect(xx,y-32,5,42);}
+      }else{
+        ctx.strokeStyle='#fff0b488';ctx.setLineDash([10,9]);ctx.lineWidth=3;ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);
+        label('DOS PLACAS · DOS COMPAÑEROS',x+w/2,y-46);
+        const charge=world.charge?.[bridge.id]??0;
+        ctx.fillStyle='#1f394966';ctx.fillRect(x+w/2-40,y-30,80,5);ctx.fillStyle='#b6f596';ctx.fillRect(x+w/2-40,y-30,Math.min(1,charge/12)*80,5);
+      }
+    }
+    for(const plate of map.plates??[]){
+      if(plate.x+plate.w<left||plate.x>right)continue;
+      const on=pressed.includes(plate.id)||active.includes(plate.group);
+      ctx.fillStyle='#35566a';ctx.fillRect(plate.x-3,plate.y-5,plate.w+6,5);
+      ctx.fillStyle=on?'#baf394':'#ffd886';ctx.beginPath();ctx.roundRect(plate.x,plate.y-(on?4:9),plate.w,on?4:9,[3,3,0,0]);ctx.fill();
+      label(active.includes(plate.group)?'✓':plate.group==='tower'?'ABRIR PARA TODOS':plate.id.endsWith('a')?'1':'2',plate.x+plate.w/2,plate.y-18);
+    }
+    if(this.lastWorldFrame!==world.frame){this.lastWorldFrame=world.frame;this.worldTime=time;}
+    const visualWorld={...world,frame:world.frame+Math.min(3,(time-(this.worldTime??time))*60)};
+    for(const saw of sawPositions(map,visualWorld)){
+      if(saw.x+saw.radius<left||saw.x-saw.radius>right)continue;
+      const original=map.saws.find(h=>h.offset===saw.offset);
+      ctx.strokeStyle='#314a6066';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(original.x-original.range,original.y);ctx.lineTo(original.x+original.range,original.y);ctx.stroke();
+      ctx.save();ctx.translate(saw.x,saw.y);ctx.rotate(this.reduced?0:time*5);ctx.fillStyle='#f27a80';ctx.strokeStyle='#ffe4c2';ctx.lineWidth=2;ctx.beginPath();
+      for(let i=0;i<32;i++){const angle=i/32*Math.PI*2,r=i%2?saw.radius-4:saw.radius+2;const x=Math.cos(angle)*r,y=Math.sin(angle)*r;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.fillStyle='#4e6274';ctx.beginPath();ctx.arc(0,0,5,0,Math.PI*2);ctx.fill();ctx.restore();
+    }
   }
   flag(x,y,color,time,label,goal=false){
     const ctx=this.ctx;if(this.reduced)time=0;

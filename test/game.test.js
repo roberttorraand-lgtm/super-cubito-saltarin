@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { levels, level, newPlayer, tick, isComplete, respawn } from '../game.js';
+import { levels, level, newPlayer, tick, isComplete, respawn, createWorld, tickGroup } from '../game.js';
+import { teamController } from '../support/team-route.js';
 import { createRoom, checkCompletion, voteNext } from '../rooms.js';
 import { reconcile, interpolate } from '../public/netcode.js';
-const flat={...level,width:5000,platforms:[[0,600,5000,120]],spikes:[],checkpoints:[],goal:{x:4900,y:600}};
+const flat={...level,width:5000,platforms:[[0,600,5000,120]],spikes:[],checkpoints:[],gates:[],plates:[],bridges:[],saws:[],goal:{x:4900,y:600}};
 function settle(p,map=flat){for(let i=0;i<30;i++)tick(p,map);}
 
 test('cooperative victory requires at least two players and every player at the flag',()=>{
@@ -34,37 +35,29 @@ test('checkpoint respawn is safe and preserves the latest checkpoint',()=>{
     const spike=map.spikes[0];p.x=spike[0];p.y=spike[1]-20;tick(p,map);assert.equal(p.deaths,map.checkpoints.length+1);
   }
 });
-// This bot uses only legal movement inputs. It must traverse every obstacle, not teleport.
-export function routeInput(p,map){
-  let jump=p.input.jump;
-  if(p.grounded){
-    if(p.jumpHeld)jump=false;
-    else{
-      const island=map.platforms.find(([x,y,w])=>p.x+16>=x&&p.x+16<x+w&&Math.abs(p.y+32-y)<3);
-      const gap=island&&island[0]+island[2]<map.width?island[0]+island[2]-p.x:Infinity;
-      const spike=map.spikes.find(([x,y,w])=>x+w>p.x&&x-p.x<92&&x-p.x>0&&Math.abs(p.y+32-(y+20))<4);
-      jump=gap<94||Boolean(spike);
-    }
+for(const map of levels)test(`two players can solve every mechanism and finish: ${map.name}`,()=>{
+  const players=[newPlayer('a','Climber','#fff',map),newPlayer('b','Base','#fff',map)];
+  const world=createWorld(),control=teamController();
+  for(let i=0;i<15000&&!players.every(p=>p.finished);i++){
+    const inputs=control(players,map,world);players.forEach((p,j)=>p.input=inputs[j]);tickGroup(players,map,world);
   }
-  return {left:false,right:true,jump};
-}
-for(const map of levels)test(`full level is playable without deaths: ${map.name} (${map.width}px)`,()=>{
-  const p=newPlayer('route','Runner','#fff',map);settle(p,map);
-  for(let i=0;i<7000&&!p.finished;i++){p.input=routeInput(p,map);tick(p,map);}
-  assert.equal(p.deaths,0,`failed at x=${p.x}`);assert.equal(p.finished,true);
-  assert.equal(p.checkpoint,map.checkpoints.length-1);assert.ok(map.width>6000);
+  assert.deepEqual(world.activated,['tower','bridge'],JSON.stringify(players.map(p=>({x:p.x,y:p.y,support:p.supportId}))));
+  assert.equal(players.every(p=>p.finished),true,JSON.stringify(players.map(p=>({x:p.x,y:p.y,deaths:p.deaths}))));
+  assert.ok(players.every(p=>p.checkpoint===map.checkpoints.length-1));
 });
 test('room progression waits for everybody, advances four levels and restarts together',()=>{
   const room=createRoom('TEST');
   const a={player:newPlayer('a','','')},b={player:newPlayer('b','','')};room.clients.add(a);room.clients.add(b);
   assert.equal(voteNext(room,'a'),false);assert.equal(room.levelIndex,0);
   for(let i=0;i<levels.length;i++){
+    room.world.activated=['tower','bridge'];
     a.player.finished=true;checkCompletion(room);assert.equal(room.phase,'playing');
     b.player.finished=true;checkCompletion(room);assert.equal(room.phase,i===3?'complete':'cleared');
     assert.equal(voteNext(room,'outsider'),false);assert.equal(voteNext(room,'a'),false);
     assert.equal(voteNext(room,'a'),false);assert.equal(voteNext(room,'b'),true);
     assert.equal(room.levelIndex,(i+1)%4);assert.equal(room.phase,'playing');assert.equal(a.player.finished,false);assert.equal(a.player.checkpoint,-1);
     assert.equal(a.lastSeq,0);assert.deepEqual(a.queue,[]);
+    assert.deepEqual(room.world.activated,[]);assert.equal(room.world.frame,0);
   }
 });
 test('prediction reconciliation replays only pending input using shared physics',()=>{

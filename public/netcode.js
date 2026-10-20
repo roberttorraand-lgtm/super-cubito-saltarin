@@ -1,9 +1,25 @@
-import { tick } from '../game.js';
+import { tick, tickGroup, createWorld } from '../game.js';
 // Replay only inputs not yet acknowledged by the authoritative server.
-export function reconcile(authoritative,pending,map){
+export function predictFrame(state,peers,map,world){
+  tickGroup([state,...peers],map,world,{mechanisms:false});
+}
+export function reconcile(authoritative,pending,map,world=null,peers=[]){
   const state={...authoritative,input:{left:false,right:false,jump:false}};
-  for(const frame of pending){state.input=frame;tick(state,map);}
+  const predictedPeers=peers.map(p=>({...p,input:{left:false,right:false,jump:false,...p.input}}));
+  const predictedWorld=world?structuredClone(world):null;
+  for(const frame of pending){
+    state.input=frame;
+    if(predictedWorld)predictFrame(state,predictedPeers,map,predictedWorld);
+    else tick(state,map);
+  }
   return state;
+}
+export function prediction(authoritative,pending,map,world,peers){
+  const state={...authoritative,input:{left:false,right:false,jump:false}};
+  const ghosts=peers.map(p=>({...p,input:{left:false,right:false,jump:false,...p.input}}));
+  const projected=structuredClone(world??createWorld());
+  for(const frame of pending){state.input=frame;predictFrame(state,ghosts,map,projected);}
+  return {state,ghosts,world:projected};
 }
 // Render remote players 100 ms behind reception to bridge 20 Hz snapshots.
 // Respawns bypass interpolation so a cube never slides across the whole map.
