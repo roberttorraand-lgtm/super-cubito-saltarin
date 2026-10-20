@@ -2,74 +2,99 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
-import { level, newPlayer, tick, isComplete } from './game.js';
+import { levels, newPlayer, tick, STEP_MS } from './game.js';
+import { createRoom, checkCompletion, voteNext } from './rooms.js';
 
-const files = new Map([['/', ['index.html','text/html']], ['/app.js',['app.js','text/javascript']], ['/style.css',['style.css','text/css']]]);
-const server = http.createServer(async (req,res) => {
-  const path = new URL(req.url, 'http://localhost').pathname;
-  if (path === '/health') { res.writeHead(200, {'Content-Type':'application/json'}); return res.end('{"ok":true}'); }
-  const file = files.get(path);
-  if (!file) { res.writeHead(404); return res.end('No encontrado'); }
-  try { const data = await readFile(new URL(`./public/${file[0]}`,import.meta.url)); res.writeHead(200, {'Content-Type':file[1]+'; charset=utf-8', 'X-Content-Type-Options':'nosniff'}); res.end(data); }
-  catch { res.writeHead(500); res.end('Error al cargar el juego'); }
+const files=new Map([['/',['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/game.js',['game.js','text/javascript']],['/netcode.js',['public/netcode.js','text/javascript']],['/renderer.js',['public/renderer.js','text/javascript']]]);
+const server=http.createServer(async(req,res)=>{
+  let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{res.writeHead(400);return res.end();}
+  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.2.0"}');}
+  const file=files.get(path);
+  if(!file){res.writeHead(404);return res.end('No encontrado');}
+  try{
+    const data=await readFile(new URL(`./${file[0]}`,import.meta.url));
+    res.writeHead(200,{'Content-Type':file[1]+'; charset=utf-8','X-Content-Type-Options':'nosniff','Cache-Control':'no-cache'});res.end(data);
+  }catch{res.writeHead(500);res.end('Error al cargar el juego');}
 });
-const wss = new WebSocketServer({ server, maxPayload: 2048 });
-const rooms = new Map();
-const colors = ['#b4f669','#92bbff','#ffb591','#d3a6ff'];
-const send = (ws,data) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
-wss.on('connection', (ws,req) => {
-  // Browser clients must come from this host; non-browser test clients have no Origin.
-  if (req.headers.origin) {
-    try { if (new URL(req.headers.origin).host !== req.headers.host) return ws.close(1008,'Origen no permitido'); }
-    catch { return ws.close(1008); }
-  }
-  ws.alive = true;
-  ws.on('pong',()=>{ ws.alive=true; });
+const wss=new WebSocketServer({server,maxPayload:4096});
+const rooms=new Map();
+const colors=['#b4f669','#92bbff','#ffb591','#d3a6ff'];
+const send=(ws,data)=>{if(ws.readyState===WebSocket.OPEN&&ws.bufferedAmount<262144)ws.send(JSON.stringify(data));};
+function sendLevel(ws,type='level'){
+  send(ws,{type,id:ws.player.id,room:ws.room.code,level:levels[ws.room.levelIndex],levelIndex:ws.room.levelIndex,totalLevels:levels.length,revision:ws.room.revision});
+}
+wss.on('connection',(ws,req)=>{
+  ws.on('error',()=>{});
+  if(req.headers.origin){try{if(new URL(req.headers.origin).host!==req.headers.host)return ws.close(1008,'Origen no permitido');}catch{return ws.close(1008);}}
+  ws.alive=true;ws.on('pong',()=>{ws.alive=true;});
+  ws.queue=[];ws.lastSeq=0;ws.receivedSeq=0;ws.lastInput=performance.now();
   ws.on('message',raw=>{
-    let m; try { m=JSON.parse(raw); } catch { return; }
-    if (!m || typeof m !== 'object') return;
-    if (m.type==='input' && ws.player) {
-      ws.player.input={left:m.left===true,right:m.right===true,jump:m.jump===true}; return;
+    let m;try{m=JSON.parse(raw);}catch{return;}
+    if(!m||typeof m!=='object')return;
+    if(m.type==='ping'){return send(ws,{type:'pong',sent:m.sent});}
+    if(m.type==='input'&&ws.player){
+      if(m.revision!==ws.room.revision||ws.room.phase!=='playing')return;
+      if(!Number.isSafeInteger(m.seq)||m.seq<=ws.receivedSeq||m.seq>ws.receivedSeq+300)return;
+      ws.receivedSeq=m.seq;ws.lastInput=performance.now();
+      // A client supplies intentions, never coordinates. At most one input is simulated per server step.
+      if(ws.queue.length>=30)ws.queue.shift();
+      ws.queue.push({seq:m.seq,left:m.left===true,right:m.right===true,jump:m.jump===true});return;
     }
-    if (m.type!=='join' || ws.player) return;
-    const requested = typeof m.room==='string' ? m.room.toUpperCase().trim() : '';
+    if(m.type==='next'&&ws.player){
+      if(m.revision!==ws.room.revision)return;
+      if(voteNext(ws.room,ws.player.id))for(const c of ws.room.clients)sendLevel(c);
+      return;
+    }
+    if(m.type!=='join'||ws.player)return;
+    const requested=typeof m.room==='string'?m.room.toUpperCase().trim():'';
     let room;
-    if (requested) {
+    if(requested){
       room=rooms.get(requested);
-      if (!room) return send(ws,{type:'error',message:'Esa sala no existe. Revisa el código.'});
-      if (room.clients.size>=4) return send(ws,{type:'error',message:'Sala completa: máximo 4 jugadores.'});
-    } else {
-      if (rooms.size>=100) return send(ws,{type:'error',message:'Servidor ocupado. Inténtalo más tarde.'});
-      let code; do { code=randomBytes(3).toString('hex').toUpperCase(); } while (rooms.has(code));
-      room={code,clients:new Set()}; rooms.set(code,room);
+      if(!room)return send(ws,{type:'error',message:'Esa sala no existe. Revisa el código.'});
+      if(room.clients.size>=4)return send(ws,{type:'error',message:'Sala completa: máximo 4 jugadores.'});
+    }else{
+      if(rooms.size>=100)return send(ws,{type:'error',message:'Servidor ocupado. Inténtalo más tarde.'});
+      let code;do{code=randomBytes(3).toString('hex').toUpperCase();}while(rooms.has(code));
+      room=createRoom(code);rooms.set(code,room);
     }
     const used=new Set([...room.clients].map(c=>c.player.color));
-    const name=(typeof m.name==='string' ? m.name : '').replace(/[\x00-\x1f]/g,'').trim().slice(0,18)||'Cubito';
-    ws.player=newPlayer(randomUUID(),name,colors.find(c=>!used.has(c))); ws.room=room;
-    room.clients.add(ws);
-    send(ws,{type:'welcome',id:ws.player.id,room:room.code,level});
+    const name=(typeof m.name==='string'?m.name:'').replace(/[\x00-\x1f]/g,'').trim().slice(0,18)||'Cubito';
+    ws.player=newPlayer(randomUUID(),name,colors.find(c=>!used.has(c)),levels[room.levelIndex]);ws.room=room;
+    // A late joiner can play the current level, including after the others reached its flag.
+    if(room.phase!=='playing'){room.phase='playing';room.ready.clear();}
+    room.clients.add(ws);sendLevel(ws,'welcome');
   });
-  ws.on('error',()=>{});
   ws.on('close',()=>{
-    if (!ws.room) return;
-    ws.room.clients.delete(ws);
-    if (!ws.room.clients.size) rooms.delete(ws.room.code);
+    if(!ws.room)return;
+    const room=ws.room;room.clients.delete(ws);room.ready.delete(ws.player.id);
+    if(!room.clients.size)rooms.delete(room.code);
+    else{
+      checkCompletion(room);
+      if(room.ready.size&&voteNext(room,[...room.ready][0]))for(const c of room.clients)sendLevel(c);
+    }
   });
 });
-let frame=0;
+let frame=0,previous=performance.now(),accumulator=0;
 const loop=setInterval(()=>{
-  frame++;
-  for (const room of rooms.values()) {
-    for (const ws of room.clients) tick(ws.player);
-    if (frame%3!==0) continue;
-    const players=[...room.clients].map(({player:p})=>({id:p.id,name:p.name,color:p.color,x:p.x,y:p.y,checkpoint:p.checkpoint,finished:p.finished,deaths:p.deaths}));
-    const state={type:'state',players,complete:isComplete(players)};
-    for (const ws of room.clients) send(ws,state);
+  const now=performance.now();accumulator+=Math.min(now-previous,100);previous=now;
+  while(accumulator>=STEP_MS){
+    accumulator-=STEP_MS;frame++;
+    for(const room of rooms.values()){
+      if(room.phase==='playing')for(const ws of room.clients){
+        const input=ws.queue.shift();
+        if(input){ws.player.input=input;ws.lastSeq=input.seq;}
+        else if(now-ws.lastInput>250)ws.player.input={left:false,right:false,jump:false};
+        tick(ws.player,levels[room.levelIndex]);
+      }
+      checkCompletion(room);
+      if(frame%3!==0)continue;
+      const players=[...room.clients].map(c=>({...c.player,input:undefined,seq:c.lastSeq}));
+      const state={type:'state',frame,revision:room.revision,players,phase:room.phase,ready:[...room.ready]};
+      for(const ws of room.clients)send(ws,state);
+    }
   }
-},1000/60);
-const heartbeat=setInterval(()=>{
-  for (const ws of wss.clients) { if (!ws.alive) ws.terminate(); else { ws.alive=false; ws.ping(); } }
-},30000);
+},4);
+const heartbeat=setInterval(()=>{for(const ws of wss.clients){if(!ws.alive)ws.terminate();else{ws.alive=false;ws.ping();}}},30000);
 server.listen(Number(process.env.PORT||3000),process.env.HOST||'0.0.0.0',()=>console.log(`Super Cubito Saltarín escuchando en ${server.address().port}`));
-function shutdown() { clearInterval(loop); clearInterval(heartbeat); for (const ws of wss.clients) ws.terminate(); wss.close(); server.close(); }
-process.on('SIGTERM',shutdown); process.on('SIGINT',shutdown);
+function shutdown(){clearInterval(loop);clearInterval(heartbeat);for(const ws of wss.clients)ws.terminate();wss.close();server.close();}
+process.on('SIGTERM',shutdown);process.on('SIGINT',shutdown);

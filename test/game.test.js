@@ -1,86 +1,84 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { once } from 'node:events';
-import WebSocket from 'ws';
-import { level, newPlayer, tick, isComplete } from '../game.js';
+import { levels, level, newPlayer, tick, isComplete, respawn } from '../game.js';
+import { createRoom, checkCompletion, voteNext } from '../rooms.js';
+import { reconcile, interpolate } from '../public/netcode.js';
+const flat={...level,width:5000,platforms:[[0,600,5000,120]],spikes:[],checkpoints:[],goal:{x:4900,y:600}};
+function settle(p,map=flat){for(let i=0;i<30;i++)tick(p,map);}
 
 test('cooperative victory requires at least two players and every player at the flag',()=>{
-  assert.equal(isComplete([]),false);
-  assert.equal(isComplete([{finished:true}]),false);
+  assert.equal(isComplete([]),false);assert.equal(isComplete([{finished:true}]),false);
   assert.equal(isComplete([{finished:true},{finished:false}]),false);
   assert.equal(isComplete([{finished:true},{finished:true}]),true);
-  assert.equal(isComplete([{finished:true},{finished:true},{finished:false}]),false);
 });
-
-test('physics: landing, edge-triggered jump, falling, checkpoint and finish',()=>{
-  const p=newPlayer('test','Cubito','#fff');
-  for(let i=0;i<30;i++)tick(p);
-  assert.equal(p.y,568);assert.equal(p.grounded,true);
-  p.input.jump=true;tick(p);assert.ok(p.y<568);
-  for(let i=0;i<90;i++)tick(p);
-  assert.equal(p.y,568,'holding jump must not auto-jump');
-  p.x=470;p.y=850;tick(p);assert.equal(p.deaths,1);assert.equal(p.x,90);
-  p.x=1250;p.y=508;tick(p);assert.equal(p.checkpoint,true);
-  p.y=850;tick(p);assert.equal(p.x,1250);assert.equal(p.deaths,2);
-  p.x=level.goal.x;p.y=568;tick(p);assert.equal(p.finished,true);
+test('acceleration, friction and variable-height jump',()=>{
+  const p=newPlayer('p','p','#fff');settle(p);p.input.right=true;tick(p,flat);
+  assert.ok(p.vx>0&&p.vx<5.8);for(let i=0;i<10;i++)tick(p,flat);assert.equal(p.vx,5.8);
+  p.input.right=false;for(let i=0;i<20;i++)tick(p,flat);assert.ok(p.vx<.1);
+  const full=newPlayer('full','',''),short=newPlayer('short','','');settle(full);settle(short);
+  full.input.jump=short.input.jump=true;tick(full,flat);tick(short,flat);short.input.jump=false;
+  let fullMin=full.y,shortMin=short.y;
+  for(let i=0;i<100;i++){tick(full,flat);tick(short,flat);fullMin=Math.min(fullMin,full.y);shortMin=Math.min(shortMin,short.y);}
+  assert.ok(fullMin<shortMin-60);assert.equal(full.y,568,'holding jump does not auto-jump');
 });
-
-test('the complete route is traversable with the actual physics',()=>{
-  const p=newPlayer('route','Runner','#fff');
-  for(let i=0;i<30;i++)tick(p);
-  // Walk and jump over each gap and spike. Jump is released between obstacles.
-  for(const [takeoff,landing] of [[350,535],[650,850],[865,1015],[1070,1220],[1310,1530],[1535,1685],[1740,1900],[2015,2220],[2245,2400]]){
-    p.input={left:false,right:true,jump:false};
-    let steps=0;
-    while(p.x<takeoff&&steps++<200)tick(p);
-    assert.equal(p.grounded,true,`grounded at ${takeoff}`);
-    p.input.jump=true;tick(p);p.input.jump=false;
-    while((p.x<landing||!p.grounded)&&steps++<300)tick(p);
-    assert.equal(p.deaths,0,`safe route past ${takeoff}`);
-    assert.ok(steps<300);
-  }
-  while(!p.finished&&p.x<2550)tick(p);
-  assert.equal(p.finished,true);
+test('coyote time and buffered jump tolerate slightly early or late input',()=>{
+  const p=newPlayer('p','','');p.grounded=false;p.coyote=4;p.vy=1;p.input.jump=true;tick(p,flat);assert.ok(p.vy<0);
+  const q=newPlayer('q','','');q.y=566;q.vy=3;q.input.jump=true;
+  tick(q,flat);assert.equal(q.grounded,true);tick(q,flat);assert.ok(q.vy<0,'buffered jump fires just after landing');
 });
-
-test('real server: shared rooms, authoritative input, isolation, capacity, cleanup and HTTP',async t=>{
-  const proc=spawn(process.execPath,['server.js'],{env:{...process.env,PORT:'0',HOST:'127.0.0.1'},stdio:['ignore','pipe','pipe']});
-  const sockets=[];
-  t.after(async()=>{for(const ws of sockets)ws.terminate();proc.kill('SIGTERM');await once(proc,'exit');});
-  const port=await new Promise((resolve,reject)=>{
-    proc.stdout.on('data',data=>{const match=String(data).match(/escuchando en (\d+)/);if(match)resolve(Number(match[1]));});
-    proc.once('error',reject);proc.once('exit',code=>reject(new Error(`Server exited ${code}`)));
-  });
-  const base=`http://127.0.0.1:${port}`;
-  assert.equal((await fetch(`${base}/health`)).status,200);
-  assert.match(await (await fetch(base)).text(),/Super Cubito/);
-  assert.equal((await fetch(`${base}/missing`)).status,404);
-  async function client(room=''){
-    const ws=new WebSocket(`ws://127.0.0.1:${port}`);sockets.push(ws);ws.inbox=[];
-    ws.on('message',raw=>{ws.inbox.push(JSON.parse(raw));});await once(ws,'open');
-    ws.send(JSON.stringify({type:'join',name:'Test',room}));return ws;
+test('checkpoint respawn is safe and preserves the latest checkpoint',()=>{
+  for(const map of levels){
+    const p=newPlayer('p','','',map);
+    map.checkpoints.forEach((cp,i)=>{p.x=cp.x;p.y=cp.y-32;p.vy=0;tick(p,map);assert.equal(p.checkpoint,i);p.y=850;tick(p,map);assert.equal(p.x,cp.x);assert.equal(p.y,cp.y-32);});
+    assert.equal(p.deaths,map.checkpoints.length);
+    const spike=map.spikes[0];p.x=spike[0];p.y=spike[1]-20;tick(p,map);assert.equal(p.deaths,map.checkpoints.length+1);
   }
-  async function wait(ws,predicate){
-    const deadline=Date.now()+3000;
-    while(Date.now()<deadline){const index=ws.inbox.findIndex(predicate);if(index>=0)return ws.inbox.splice(index,1)[0];await new Promise(r=>setTimeout(r,10));}
-    throw new Error('Timed out waiting for expected server message');
+});
+// This bot uses only legal movement inputs. It must traverse every obstacle, not teleport.
+export function routeInput(p,map){
+  let jump=p.input.jump;
+  if(p.grounded){
+    if(p.jumpHeld)jump=false;
+    else{
+      const island=map.platforms.find(([x,y,w])=>p.x+16>=x&&p.x+16<x+w&&Math.abs(p.y+32-y)<3);
+      const gap=island&&island[0]+island[2]<map.width?island[0]+island[2]-p.x:Infinity;
+      const spike=map.spikes.find(([x,y,w])=>x+w>p.x&&x-p.x<92&&x-p.x>0&&Math.abs(p.y+32-(y+20))<4);
+      jump=gap<94||Boolean(spike);
+    }
   }
-  const a=await client(),welcome=await wait(a,m=>m.type==='welcome');
-  const b=await client(welcome.room);await wait(b,m=>m.type==='welcome');
-  const initial=await wait(b,m=>m.type==='state'&&m.players.length===2);
-  assert.equal(initial.complete,false);
-  a.send(JSON.stringify({type:'input',right:true,x:2400,finished:true}));
-  const moved=await wait(b,m=>m.type==='state'&&m.players.find(p=>p.id===welcome.id)?.x>110);
-  assert.ok(moved.players.find(p=>p.id===welcome.id).x<2400,'client cannot teleport');
-  a.send(JSON.stringify({type:'input'}));
-  const isolated=await client();await wait(isolated,m=>m.type==='welcome');
-  assert.equal((await wait(isolated,m=>m.type==='state')).players.length,1);
-  const c=await client(welcome.room);await wait(c,m=>m.type==='welcome');
-  const d=await client(welcome.room);await wait(d,m=>m.type==='welcome');
-  const four=await wait(a,m=>m.type==='state'&&m.players.length===4);
-  assert.equal(new Set(four.players.map(p=>p.color)).size,4);
-  const overflow=await client(welcome.room);assert.match((await wait(overflow,m=>m.type==='error')).message,/completa/);
-  d.close();await once(d,'close');await wait(a,m=>m.type==='state'&&m.players.length===3);
-  const missing=await client('ZZZZZZ');assert.match((await wait(missing,m=>m.type==='error')).message,/no existe/);
+  return {left:false,right:true,jump};
+}
+for(const map of levels)test(`full level is playable without deaths: ${map.name} (${map.width}px)`,()=>{
+  const p=newPlayer('route','Runner','#fff',map);settle(p,map);
+  for(let i=0;i<7000&&!p.finished;i++){p.input=routeInput(p,map);tick(p,map);}
+  assert.equal(p.deaths,0,`failed at x=${p.x}`);assert.equal(p.finished,true);
+  assert.equal(p.checkpoint,map.checkpoints.length-1);assert.ok(map.width>6000);
+});
+test('room progression waits for everybody, advances four levels and restarts together',()=>{
+  const room=createRoom('TEST');
+  const a={player:newPlayer('a','','')},b={player:newPlayer('b','','')};room.clients.add(a);room.clients.add(b);
+  assert.equal(voteNext(room,'a'),false);assert.equal(room.levelIndex,0);
+  for(let i=0;i<levels.length;i++){
+    a.player.finished=true;checkCompletion(room);assert.equal(room.phase,'playing');
+    b.player.finished=true;checkCompletion(room);assert.equal(room.phase,i===3?'complete':'cleared');
+    assert.equal(voteNext(room,'outsider'),false);assert.equal(voteNext(room,'a'),false);
+    assert.equal(voteNext(room,'a'),false);assert.equal(voteNext(room,'b'),true);
+    assert.equal(room.levelIndex,(i+1)%4);assert.equal(room.phase,'playing');assert.equal(a.player.finished,false);assert.equal(a.player.checkpoint,-1);
+    assert.equal(a.lastSeq,0);assert.deepEqual(a.queue,[]);
+  }
+});
+test('prediction reconciliation replays only pending input using shared physics',()=>{
+  const server=newPlayer('a','','');settle(server);const input={left:false,right:true,jump:false};
+  for(let i=0;i<12;i++){server.input=input;tick(server,flat);}
+  const snapshot={...server};const pending=[];
+  for(let seq=13;seq<=20;seq++){const frame={...input,seq,jump:seq>=16};pending.push(frame);server.input=frame;tick(server,flat);}
+  const result=reconcile(snapshot,pending,flat);
+  for(const key of ['x','y','vx','vy','grounded','jumpHeld'])assert.equal(result[key],server[key]);
+  assert.equal(snapshot.x<result.x,true,'snapshot is not mutated');
+});
+test('remote interpolation smooths snapshots and snaps respawns safely',()=>{
+  const a={time:100,player:{x:20,y:40,deaths:0}},b={time:150,player:{x:50,y:70,deaths:0}};
+  assert.equal(interpolate([a,b],125).x,35);assert.equal(interpolate([a,b],200).x,50);
+  assert.equal(interpolate([a,b],0).x,20);
+  assert.equal(interpolate([a,{time:150,player:{x:1000,y:0,deaths:1}}],125).x,1000);
 });

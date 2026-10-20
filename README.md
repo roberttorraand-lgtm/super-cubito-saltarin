@@ -1,6 +1,6 @@
 # Super Cubito Saltarín
 
-Prototipo de plataformas cooperativo online para 2–4 jugadores. Un servidor compartido sincroniza a los cubitos mediante WebSocket y calcula la física; cada jugador usa su navegador.
+Plataformas cooperativo online para 2–4 jugadores. Cuatro mundos conectados: **Pradera de los encuentros**, **Cañón del atardecer**, **Cumbres de cristal** y **Jardines de la luna**. Sus recorridos miden 7.150, 8.315, 9.465 y 10.600 píxeles, con trampas y puntos de control intermedios.
 
 ## Desarrollo
 
@@ -13,7 +13,22 @@ npm start
 
 El servidor escucha en `0.0.0.0:3000`. `PORT` y `HOST` son opcionales. `npm run dev` reinicia el servidor al editarlo; reiniciarlo elimina las salas. No necesita cuentas, base de datos ni claves.
 
-Crea una sala, copia la invitación y compártela. Tus amigos abren la misma dirección pública e introducen su nombre y el código para entrar. Puedes probar con dos pestañas. A/D o flechas mueven al cubito; espacio, W o flecha arriba saltan. Hay controles táctiles, trampas, reaparición y un punto de control. Todos los jugadores conectados deben alcanzar la meta; se requieren al menos dos para completar el nivel. Las salas admiten incorporaciones durante la partida y desaparecen cuando sale el último jugador.
+Crea una sala y comparte su invitación. Los demás abren la misma dirección pública, escriben su nombre y pulsan **Entrar** con el código. Puedes probar usando dos pestañas. Los jugadores nuevos entran en el mundo actual de su sala.
+
+- A/D o flechas para moverse; espacio, W o flecha arriba para saltar.
+- Mantén el salto para llegar más alto; suéltalo antes para dar un salto corto.
+- Hay controles táctiles y un botón de pantalla completa cuando el navegador lo permite.
+- Las banderas intermedias guardan tu punto de reaparición en ese mundo.
+- Se requieren al menos dos jugadores conectados para completar un mundo. Deben llegar todos a la meta y marcarse como listos para pasar juntos al siguiente.
+- Tras el cuarto mundo, el equipo puede reiniciar la aventura en la misma sala.
+
+## Fluidez y sincronización
+
+La física compartida en `game.js` utiliza pasos fijos de 60 Hz, aceleración, frenado, salto variable, un margen de seis pasos para saltar tras abandonar una plataforma y un búfer de siete pasos para pulsaciones ligeramente anticipadas. El servidor controla posiciones, colisiones y avance de mundos; los clientes solo envían intenciones numeradas.
+
+El navegador predice sus propios movimientos y vuelve a simular las entradas pendientes al recibir la confirmación del servidor. Los compañeros se dibujan interpolando instantáneas con 100 ms de margen. Las reapariciones no se interpolan a través de todo el mapa. El servidor limita las colas y simula como máximo una entrada por jugador y paso.
+
+El renderizado usa `requestAnimationFrame`, cámara con suavizado independiente de la frecuencia de pantalla, fondos precalculados, descarte de objetos fuera de cámara y un máximo de 120 partículas. Incluye deformación al saltar y aterrizar, polvo, banderas animadas, paralaje, minimapa y paisajes propios. Respeta la preferencia de movimiento reducido para efectos decorativos. La fluidez final depende del dispositivo y de la conexión; la predicción no elimina la latencia real entre jugadores.
 
 ## Validación
 
@@ -21,10 +36,12 @@ Crea una sala, copia la invitación y compártela. Tus amigos abren la misma dir
 npm test
 ```
 
-Las pruebas ejercitan física, reaparición, meta cooperativa, dos conexiones reales, movimiento sincronizado, aislamiento, salas completas y desconexiones. `GET /health` comprueba disponibilidad del servidor.
+Las 12 pruebas cubren física, altura de salto, tolerancia de entrada, puntos de control, recorrido completo de los cuatro mundos mediante entradas legales sin muertes, progresión y reinicio cooperativos, reconciliación, interpolación, conexiones WebSocket reales, aislamiento de salas, límite de cuatro jugadores, validación de origen y disponibilidad HTTP. No se requieren servicios externos.
 
-## Jugar por Internet
+Comprobaciones de navegador: crear una sala en un contexto, unirse desde otro, comprobar ambos nombres, mover y saltar, entrar y salir de pantalla completa y repetir con controles táctiles. Para validar latencia, introducir 125 ms de retraso en cada sentido del WebSocket: el movimiento local debe dibujarse antes de la confirmación y converger a la posición del servidor al detenerse.
 
-Despliega esta aplicación Node en un alojamiento con **WebSockets persistentes**. Usa una sola instancia y HTTPS (el navegador usará WSS); configura el proxy para permitir la actualización WebSocket y pasar el host público. Comparte la dirección pública que te dé el alojamiento. Abrir el juego en localhost solo sirve para pruebas locales: no publica una partida en Internet.
+## Publicación
 
-Este prototipo conserva las salas en memoria: un reinicio pierde la partida. No incluye reconexión automática, cuentas, guardado permanente, varios niveles, historia ni power-ups. Estos contenidos se diseñarán después. No está desplegado por defecto.
+`render.yaml` configura un único servicio Node en Render, con instalación y pruebas antes de arrancar y comprobación `/health`. El despliegue requiere **WebSockets persistentes** y una sola instancia. En otros proveedores, usa HTTPS/WSS y configura el proxy para permitir la actualización WebSocket y pasar el host público. Comparte la dirección pública del alojamiento. Una dirección localhost solo sirve para pruebas locales.
+
+Las salas viven en memoria: un reinicio o despliegue interrumpe las partidas. No hay reconexión automática, cuentas ni guardado permanente. La historia y los power-ups quedan para una próxima versión. El plan gratuito de Render puede entrar en reposo cuando no hay uso; la siguiente carga tardará más mientras arranca el servidor.
