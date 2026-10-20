@@ -63,8 +63,12 @@ function updateState(m){
     const ready=m.ready.includes(id);$('#next').disabled=ready;
     $('#next').textContent=ready?`Esperando al equipo (${m.ready.length}/${players.length})`:(final?'Volver a jugar juntos ↗':'Listo para el siguiente mundo ↗');
   }
-  const hint=!world.activated.includes('tower')&&local?.x<570?'HACED UNA TORRE · ABRID EL PASO DESDE EL OTRO LADO':!world.activated.includes('bridge')&&Math.abs((level.bridges?.[0]?.rect[0]??Infinity)-(local?.x??0))<650?'DOS CUBITOS EN LAS DOS PLACAS · CONSTRUID EL PUENTE':null;
-  const instruction=hint?(world.activated.includes('tower')?'Puente: un cubito sobre cada placa hasta que se iluminen.':'Haced una torre: saltad desde un compañero y pisad la placa al otro lado.'):`${levelIndex+1} / ${levels.length} · ${level.subtitle}`;
+  const objective=(level.objectives??[]).find(o=>!world.activated.includes(o.group));
+  const pads=objective?level.plates.filter(p=>p.group===objective.group):[];
+  const nearby=objective&&pads.length&&Math.min(...pads.map(p=>p.x))-(local?.x??0)<750;
+  const hint=nearby?objective.hint:null;
+  const movementTip=level.id===2?'Hielo: frena con tiempo y no te detengas sobre los puentes frágiles.':level.id===3?'Gravedad lunar: mantén el salto y calcula los pulsos de energía.':level.subtitle;
+  const instruction=hint??`${levelIndex+1} / ${levels.length} · ${movementTip}`;
   if($('#level-info').textContent!==instruction)$('#level-info').textContent=instruction;
   $('#status').textContent=local?.finished?'EN LA META · ESPERANDO AL EQUIPO':players.length<2?'INVITA A ALGUIEN PARA COMPLETAR EL NIVEL':hint??(local?.checkpoint>=0?'PUNTO DE CONTROL GUARDADO':'¡JUNTOS HASTA LA BANDERA!');
 }
@@ -153,7 +157,8 @@ function draw(now){
     }
     if(now-lastPing>1500){lastPing=now;socket.send(JSON.stringify({type:'ping',sent:now}));}
   }else visible.push({...newPlayer('demo','Tu aventura empieza aquí','#b4f669'),grounded:true});
-  renderer.draw(visible,id,now/1000,dt,world);
+  const displayWorld=id&&phase==='playing'?{...world,frame:projectedWorld.frame}:world;
+  renderer.draw(visible,id,now/1000,dt,displayWorld);
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);

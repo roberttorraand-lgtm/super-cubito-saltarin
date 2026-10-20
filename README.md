@@ -1,6 +1,14 @@
 # Super Cubito Saltarín
 
-Plataformas cooperativo online para 2–4 jugadores. Cuatro mundos conectados: **Pradera de los encuentros**, **Cañón del atardecer**, **Cumbres de cristal** y **Jardines de la luna**. Sus recorridos miden 7.400, 8.550, 9.685 y 10.850 píxeles, con trampas y puntos de control intermedios.
+Plataformas cooperativo online para 2–4 jugadores. Cuatro recorridos diseñados individualmente en `levels.js`, cada uno con geometría, ambientación y obstáculos propios:
+
+| Mundo | Retos propios |
+| --- | --- |
+| Bosque de las copas | Desniveles, troncos que hay que saltar, espinos y una torre de dos cubitos para abrir el paso. |
+| Cañón de los puentes | Dos barrancos con pasarelas cooperativas de 380 y 430 píxeles, sierras móviles y rutas entre mesetas. |
+| Glaciar del deshielo | Dos placas derriten una barrera; el hielo reduce la tracción y los puentes frágiles se rompen tras pisarlos. |
+| Constelación de los saltos | Gravedad reducida, plataformas suspendidas, puente de energía y barreras que se encienden y se apagan. |
+
 
 ## Desarrollo
 
@@ -19,10 +27,12 @@ Crea una sala y comparte su invitación. Los demás abren la misma dirección p�
 - Mantén el salto para llegar más alto; suéltalo antes para dar un salto corto.
 - Hay controles táctiles y un botón de pantalla completa cuando el navegador lo permite.
 - Los cubitos chocan entre sí. Salta y aterriza sobre un compañero para formar una torre; el de abajo puede transportar a los de arriba. En la meta dejan de bloquear a los demás.
-- En cada mundo hay un muro de 156 píxeles que requiere saltar desde otro cubito. Quien lo cruza pisa la placa del otro lado para abrir el paso al resto.
-- Un hueco de 330 píxeles exige que dos compañeros ocupen dos placas distintas durante 12 pasos de simulación (aproximadamente 0,2 segundos); así construís un puente para todos.
+- En el bosque, un muro de 156 píxeles requiere saltar desde otro cubito. Quien lo cruza pisa la placa del otro lado para abrir el paso al resto.
+- En el cañón y la luna, ocupad dos placas distintas durante 12 pasos de simulación (aproximadamente 0,2 segundos) para construir cada puente. En el glaciar, dos placas derriten la barrera inicial.
 - Las puertas y puentes permanecen activados hasta cambiar de mundo o reiniciar la partida, aunque un jugador salga o muera. Se pueden incorporar compañeros nuevos después de abrirlos.
-- Las sierras móviles recorren raíles y obligan a calcular el salto.
+- Las sierras del cañón recorren raíles y obligan a calcular el salto.
+- En el glaciar frena antes de llegar al borde. El hielo frágil se rompe 42 pasos después de pisarlo y vuelve tras 180 pasos (tres segundos), cuando no hay un cubito dentro.
+- En la luna el salto dura más. Las barreras de energía alternan 80 pasos activas y 100 apagadas; su estado aparece en el escenario.
 - Las banderas intermedias guardan tu punto de reaparición en ese mundo.
 - Se requieren al menos dos jugadores conectados para completar un mundo. Deben llegar todos a la meta y marcarse como listos para pasar juntos al siguiente.
 - Tras el cuarto mundo, el equipo puede reiniciar la aventura en la misma sala.
@@ -31,7 +41,7 @@ Crea una sala y comparte su invitación. Los demás abren la misma dirección p�
 
 La física compartida en `game.js` utiliza pasos fijos de 60 Hz, aceleración, frenado, salto variable, un margen de seis pasos para saltar tras abandonar una plataforma y un búfer de siete pasos para pulsaciones ligeramente anticipadas. El servidor controla posiciones, colisiones y avance de mundos; los clientes solo envían intenciones numeradas.
 
-El servidor simula primero el movimiento de todos los cubitos y después resuelve los contactos entre ellos, el transporte sobre compañeros y los mecanismos. Los estados de puertas, placas y puentes pertenecen a cada sala y se envían a todos sus jugadores.
+El servidor simula primero el movimiento de todos los cubitos y después resuelve los contactos entre ellos, el transporte sobre compañeros y los mecanismos. El reloj usado para dibujar las sierras, el hielo y las barreras corresponde al usado en la predicción local. Los estados de puertas, placas y puentes pertenecen a cada sala y se envían a todos sus jugadores.
 
 El navegador predice sus propios movimientos y vuelve a simular las entradas pendientes al recibir la confirmación del servidor. Los compañeros se dibujan interpolando 30 instantáneas por segundo sobre el reloj de simulación del servidor, con un margen adaptativo de unos 67 ms en conexiones estables y hasta 150 ms cuando varía el retraso. Las reapariciones no se interpolan a través de todo el mapa. El servidor simula como máximo una entrada por jugador y paso. Tras una ráfaga de red conserva como máximo cuatro entradas para simular, descarta movimiento obsoleto y conserva una pulsación corta de salto; así evita reproducir hasta medio segundo de órdenes atrasadas. Los estados se serializan una vez por sala y se omiten para sockets con más de 32 KiB pendientes, sin dejar crecer una cola de imágenes antiguas.
 
@@ -43,7 +53,7 @@ El renderizado usa `requestAnimationFrame`, cámara con suavizado independiente 
 npm test
 ```
 
-Las pruebas cubren física, altura de salto, tolerancia de entrada, puntos de control, recorrido completo de los cuatro mundos con dos actores usando entradas legales, resolución de muros y puentes, apilamiento y transporte de cuatro cubitos, choques contra paredes, desaparición de un soporte, activación de placas por compañeros distintos, sierras móviles, progresión y reinicio cooperativos, reconciliación, interpolación, conexiones WebSocket reales, aislamiento de salas, límite de cuatro jugadores, validación de origen y disponibilidad HTTP. Las pruebas de red cubren además ráfagas de entradas, conservación de pulsaciones cortas, reloj monotónico con variaciones de retraso, interpolación a 30 Hz y transiciones suaves al entrar en contacto. No se requieren servicios externos.
+Las pruebas cubren física, altura de salto, tolerancia de entrada, puntos de control, recorrido completo de los cuatro mundos con dos actores usando entradas legales, resolución de muros y puentes, apilamiento y transporte de cuatro cubitos, choques contra paredes, desaparición de un soporte, activación de placas por compañeros distintos, sierras móviles, diferencias de tracción y gravedad, rotura y restauración del hielo, pulsos de energía, correspondencia entre física del servidor y predicción, progresión y reinicio cooperativos, reconciliación, interpolación, conexiones WebSocket reales, aislamiento de salas, límite de cuatro jugadores, validación de origen y disponibilidad HTTP. Las pruebas de red cubren además ráfagas de entradas, conservación de pulsaciones cortas, reloj monotónico con variaciones de retraso, interpolación a 30 Hz y transiciones suaves al entrar en contacto. No se requieren servicios externos.
 
 Comprobaciones de navegador: crear una sala en un contexto, unirse desde otro, comprobar ambos nombres, mover y saltar, entrar y salir de pantalla completa y repetir con controles táctiles. Para validar latencia, introducir 125 ms de retraso en cada sentido del WebSocket: el movimiento local debe dibujarse antes de la confirmación y converger a la posición del servidor al detenerse.
 

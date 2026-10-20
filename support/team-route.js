@@ -13,17 +13,19 @@ function route(p,map,world){
       const gap=island&&island[0]+island[2]<map.width?island[0]+island[2]-p.x:Infinity;
       const spike=map.spikes.some(([x,y,w])=>x+w>p.x&&x-p.x<92&&x-p.x>0&&Math.abs(p.y+32-y-20)<4);
       const saw=sawPositions(map,world).some(h=>h.x-p.x<115&&h.x-p.x>0&&Math.abs(p.y+32-h.y)<65);
-      jump=gap<94||spike||saw;
+      const block=(map.blocks??[]).some(b=>b.rect[0]>p.x&&b.rect[0]-p.x<92&&p.y+32>b.rect[1]);
+      const laser=(map.lasers??[]).some(l=>l.x>p.x&&l.x-p.x<150);
+      jump=gap<94||spike||saw||block||laser;
     }
   }
   return {left:false,right:true,jump};
 }
 // Both actors use only ordinary left/right/jump inputs; no position writes.
 export function teamController(){
-  let phase='approach',wait=0;
+  let phase='approach',wait=0;const leaders=new Map();
   return (players,map,world)=>{
     const [a,b]=players;let ia=idle(),ib=idle();
-    if(!world.activated.includes('tower')){
+    if(map.objectives.some(o=>o.type==='tower')&&!world.activated.includes('tower')){
       if(phase==='approach'){
         ia=seek(a,235);ib=seek(b,300);
         if(Math.abs(a.x-235)<5&&Math.abs(b.x-300)<5&&a.grounded&&b.grounded)phase='climb';
@@ -39,13 +41,19 @@ export function teamController(){
       }
     }else{
       ia=route(a,map,world);ib=route(b,map,world);
-      if(!world.activated.includes('bridge')){
-        const pads=map.plates.filter(p=>p.group==='bridge');
-        for(const [p,pad,assign] of [[a,pads[1],v=>ia=v],[b,pads[0],v=>ib=v]]){
-          const target=pad.x+6;
+      const objective=map.objectives.find(o=>o.type==='plates'&&!world.activated.includes(o.group));
+      if(objective){
+        const pads=map.plates.filter(p=>p.group===objective.group).sort((p,q)=>p.x-q.x);
+        if(!leaders.has(objective.group))leaders.set(objective.group,a.x>b.x?a.id:b.id);
+        const lead=leaders.get(objective.group);
+        for(const [p,assign] of [[a,v=>ia=v],[b,v=>ib=v]]){
+          const pad=pads[p.id===lead?1:0],target=pad.x+6;
           if(p.x>target-85&&Math.abs(p.y+32-pad.y)<5)assign(seek(p,target));
         }
-      }else if(!a.finished&&b.grounded&&a.x-b.x<60&&a.x>b.x)ib=idle();
+      }else{
+        if(!a.finished&&b.grounded&&a.x-b.x<60&&a.x>b.x)ib=idle();
+        if(!b.finished&&a.grounded&&b.x-a.x<60&&b.x>a.x)ia=idle();
+      }
     }
     return [ia,ib];
   };

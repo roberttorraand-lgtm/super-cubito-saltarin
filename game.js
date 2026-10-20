@@ -1,42 +1,8 @@
 // The same deterministic 60 Hz simulation runs on the server and in the browser.
 export const STEP_MS = 1000 / 60;
 export const SIZE = 32;
-const themes = [
-  { sky: ['#bfe8ef','#f4f4d3'], hills: ['#b1d6b0','#82b390','#527f70'], ground:'#527d68', grass:'#abe179', dirt:'#729274', accent:'#f5d47c', glow:'#fff2b9' },
-  { sky: ['#d1b6de','#ffdfb0'], hills: ['#c39cbd','#9c7d9e','#6f627f'], ground:'#76617b', grass:'#e6ac78', dirt:'#9e7c8e', accent:'#ffda8b', glow:'#fff0b4' },
-  { sky: ['#a5c8ef','#e9f7ff'], hills: ['#b0cde5','#7fabc9','#537b9e'], ground:'#648da7', grass:'#e4faff', dirt:'#86a9bf', accent:'#88f1e4', glow:'#d9ffff' },
-  { sky: ['#171e43','#61557f'], hills: ['#4e4b79','#3b3c67','#292d51'], ground:'#535078', grass:'#b7a5ef', dirt:'#71638d', accent:'#baf8dd', glow:'#e8daff' }
-];
-const specs = [
-  ['Pradera de los encuentros','Entre hojas y pequeños comienzos',12,0],
-  ['Cañón del atardecer','Un camino sobre el cielo naranja',14,1],
-  ['Cumbres de cristal','Respira hondo. El cielo está cerca.',16,2],
-  ['Jardines de la luna','El último salto se da en compañía',18,3]
-];
-export const levels = specs.map(([name,subtitle,count,theme],index)=>{
-  const platforms=[],spikes=[],checkpoints=[{x:210,y:600}];
-  let bridge;
-  const saws=[];
-  let x=0;
-  for(let i=0;i<count;i++){
-    const width=i===0?560:440+((i*7+index*3)%4)*40;
-    const y=i===0?600:600-((i+index)%3)*25;
-    platforms.push([x,y,width,720-y]);
-    // Wide, distinct islands leave space to land before the next obstacle.
-    if(i>0 && i!==4 && (i+index)%2===0)spikes.push([x+180,y-20,48+index*5,20]);
-    if(i>0&&i%3===0)checkpoints.push({x:x+65,y});
-    const gap=i===count-1?0:i===3?330:80+((i+index)%3)*15;
-    if(i===3)bridge={id:'bridge',rect:[x+width,y,gap,24]};
-    if(i===5||i===9)saws.push({x:x+width*.5,y:y-28,range:85,radius:17,period:210-index*15,offset:i*29});
-    x+=width+gap;
-  }
-  const last=platforms.at(-1);
-  const gates=[{id:'tower',rect:[370,444,42,156]}];
-  const plates=[{id:'release',group:'tower',x:465,y:600,w:46},
-    {id:'bridge-a',group:'bridge',x:bridge.rect[0]-170,y:bridge.rect[1],w:44},
-    {id:'bridge-b',group:'bridge',x:bridge.rect[0]-85,y:bridge.rect[1],w:44}];
-  return {id:index,name,subtitle,theme:themes[theme],width:x,height:720,spawn:{x:90,y:568},platforms,spikes,checkpoints,gates,plates,bridges:[bridge],saws,goal:{x:x-100,y:last[1]}};
-});
+import { levels } from './levels.js';
+export { levels };
 export const level = levels[0];
 export function newPlayer(id,name,color,map=level,spawnSlot=0){
   return {id,name,color,...map.spawn,x:map.spawn.x+spawnSlot*44,spawnSlot,vx:0,vy:0,grounded:false,checkpoint:-1,finished:false,deaths:0,
@@ -51,9 +17,10 @@ export function respawn(p,map){
 export function tick(p,map=level,world=null){
   if(p.finished)return;
   const direction=Number(p.input.right)-Number(p.input.left);
-  const acceleration=p.grounded?0.95:0.6;
+  const icy=p.grounded&&!p.supportId&&(map.iceRegions??[]).some(r=>p.x+16>=r.x&&p.x+16<r.x+r.w);
+  const acceleration=p.grounded?(icy?.3:.95):.6;
   if(direction){p.vx+=direction*acceleration;p.facing=direction;}
-  else {p.vx*=p.grounded?0.72:0.96;if(Math.abs(p.vx)<0.05)p.vx=0;}
+  else {p.vx*=p.grounded?(icy?.965:.72):.96;if(Math.abs(p.vx)<0.05)p.vx=0;}
   p.vx=Math.max(-5.8,Math.min(5.8,p.vx));
   p.coyote=p.grounded?6:Math.max(0,p.coyote-1);
   p.jumpBuffer=p.input.jump&&!p.jumpHeld?7:Math.max(0,p.jumpBuffer-1);
@@ -61,7 +28,7 @@ export function tick(p,map=level,world=null){
   // Releasing early produces a shorter hop; a held jump gives full height.
   if(!p.input.jump&&p.jumpHeld&&p.vy < -5)p.vy=-5;
   p.jumpHeld=p.input.jump;
-  p.vy=Math.min(p.vy+0.62,17);
+  p.vy=Math.min(p.vy+(map.gravity??.62),17);
   const solids=solidRects(map,world);
   p.supportId=null;
   p.x=Math.max(0,Math.min(map.width-SIZE,p.x+p.vx));
@@ -78,17 +45,17 @@ export function tick(p,map=level,world=null){
       else if(p.vy<0&&oldY>=y+h-1){p.y=y+h;p.vy=0;}
     }
   }
-  if(p.y>map.height+100||map.spikes.some(([x,y,w,h])=>p.x+SIZE>x&&p.x<x+w&&p.y+SIZE>y&&p.y<y+h)||sawPositions(map,world).some(h=>circleHits(p,h)))respawn(p,map);
+  if(p.y>map.height+100||hitsHazard(p,map,world))respawn(p,map);
   map.checkpoints.forEach((point,i)=>{
     if(i>p.checkpoint&&p.x>point.x-25&&p.x<point.x+70&&Math.abs(p.y+SIZE-point.y)<12)p.checkpoint=i;
   });
   if(p.x>map.goal.x-20&&Math.abs(p.y+SIZE-map.goal.y)<45){p.finished=true;p.vx=p.vy=0;}
 }
 
-export function createWorld(){return {frame:0,activated:[],charge:{},pressed:[]};}
+export function createWorld(){return {frame:0,activated:[],charge:{},pressed:[],crumble:{}};}
 export function solidRects(map,world){
   const active=world?.activated??[];
-  return [...map.platforms,...(map.gates??[]).filter(g=>!active.includes(g.id)).map(g=>g.rect),
+  return [...map.platforms,...(map.blocks??[]).map(b=>b.rect),...(map.crumble??[]).filter(b=>crumbleActive(b,world)).map(b=>b.rect),...(map.gates??[]).filter(g=>!active.includes(g.id)).map(g=>g.rect),
     ...(map.bridges??[]).filter(b=>active.includes(b.id)).map(b=>b.rect)];
 }
 export function sawPositions(map,world){
@@ -153,6 +120,36 @@ export function tickGroup(players,map,world,{mechanisms=true}={}){
   for(const p of players)tick(p,map,world);
   resolvePlayers(players,previous,map,world);
   // Collision displacement can move a cube onto a hazard too.
-  for(const p of players)if(!p.finished&&(map.spikes.some(([x,y,w,h])=>p.x+SIZE>x&&p.x<x+w&&p.y+SIZE>y&&p.y<y+h)||sawPositions(map,world).some(h=>circleHits(p,h))))respawn(p,map);
-  if(mechanisms)updateMechanisms(players,map,world);
+  for(const p of players)if(!p.finished&&hitsHazard(p,map,world))respawn(p,map);
+  if(mechanisms){updateMechanisms(players,map,world);updateCrumble(players,map,world);}
+}
+
+export function crumbleActive(tile,world){
+ const state=world?.crumble?.[tile.id],frame=world?.frame??0;
+ return !state||frame<state.breakAt;
+}
+export function updateCrumble(players,map,world){
+ world.crumble??={};
+ for(const tile of map.crumble??[]){
+  const state=world.crumble[tile.id];
+  if(state&&world.frame>=state.restoreAt){
+   const [x,y,w,h]=tile.rect;
+   if(!players.some(p=>p.x+SIZE>x&&p.x<x+w&&p.y+SIZE>y&&p.y<y+h))delete world.crumble[tile.id];
+  }
+  if(world.crumble[tile.id])continue;
+  const [x,y,w]=tile.rect;
+  if(players.some(p=>!p.finished&&p.grounded&&Math.abs(p.y+SIZE-y)<3&&p.x+SIZE>x&&p.x<x+w)){
+   world.crumble[tile.id]={breakAt:world.frame+tile.delay,restoreAt:world.frame+tile.delay+tile.restore};
+  }
+ }
+}
+export function laserRects(map,world){
+ const frame=world?.frame??0;
+ return (map.lasers??[]).filter(l=>(frame+l.offset)%l.period<l.on).map(l=>[l.x,l.y,l.w,l.h]);
+}
+
+export function hitsHazard(p,map,world){
+ return map.spikes.some(([x,y,w,h])=>p.x+SIZE>x&&p.x<x+w&&p.y+SIZE>y&&p.y<y+h)
+  ||sawPositions(map,world).some(h=>circleHits(p,h))
+  ||laserRects(map,world).some(([x,y,w,h])=>p.x+SIZE>x&&p.x<x+w&&p.y+SIZE>y&&p.y<y+h);
 }

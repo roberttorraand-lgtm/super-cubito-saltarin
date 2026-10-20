@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { level,levels,newPlayer,tickGroup,tick,createWorld,updateMechanisms,solidRects,sawPositions } from '../game.js';
 import { prediction, predictFrame } from '../public/netcode.js';
-const flat={...level,width:1200,platforms:[[0,600,1200,120]],spikes:[],saws:[],checkpoints:[],gates:[],plates:[],bridges:[],goal:{x:1100,y:600}};
+const flat={...level,width:1200,platforms:[[0,600,1200,120]],spikes:[],blocks:[],crumble:[],lasers:[],iceRegions:[],saws:[],checkpoints:[],gates:[],plates:[],bridges:[],goal:{x:1100,y:600}};
 function actor(id,x,y=568){return {...newPlayer(id,id,'#fff',flat),x,y,grounded:true};}
 function steps(ps,map,w,n=60){for(let i=0;i<n;i++)tickGroup(ps,map,w);}
 function overlapping(a,b){return a.x+32>b.x+.01&&a.x<b.x+32-.01&&a.y+32>b.y+.01&&a.y<b.y+32-.01;}
@@ -32,14 +32,14 @@ test('support disappears cleanly when teammate leaves or respawns',()=>{
  steps([a],flat,w,60);assert.equal(a.supportId,null);assert.equal(a.y,568);
 });
 test('solo full-height jump cannot clear the cooperative tower gate',()=>{
- for(const map of levels){
+ for(const map of levels.filter(m=>m.gates.some(g=>g.id==='tower'))){
   const p=actor('solo',300);p.input.jump=true;p.input.right=true;
   const world=createWorld();for(let i=0;i<100;i++)tickGroup([p],map,world);
   assert.ok(p.x+32<=map.gates[0].rect[0]+.01);assert.equal(world.activated.includes('tower'),false);
  }
 });
 test('two separate plates need distinct teammates; mechanisms latch and reset with a new world',()=>{
- const map=levels[0],w=createWorld(),pads=map.plates.filter(p=>p.group==='bridge');
+ const map=levels[1],w=createWorld(),pads=map.plates.filter(p=>p.group==='bridge');
  const a=actor('a',pads[0].x,pads[0].y-32),b=actor('b',pads[0].x+5,pads[0].y-32);
  for(let i=0;i<20;i++)updateMechanisms([a,b],map,w);
  assert.equal(w.activated.includes('bridge'),false);
@@ -57,7 +57,7 @@ test('plate occupation is physical: airborne cubes do not activate a pad',()=>{
  assert.equal(solidRects(map,w).includes(map.gates[0].rect),false);
 });
 test('moving saws change position and cause authoritative respawns',()=>{
- const map=levels[0],w=createWorld(),a=actor('a',0),saw=sawPositions(map,w)[0];
+ const map=levels[1],w=createWorld(),a=actor('a',0),saw=sawPositions(map,w)[0];
  assert.notEqual(saw.x,sawPositions(map,{...w,frame:60})[0].x);
  a.x=saw.x-16;a.y=saw.y-16;tick(a,map,w);assert.equal(a.deaths,1);
 });

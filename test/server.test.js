@@ -15,7 +15,7 @@ test('real WebSocket rooms: synchronization, authoritative limits, isolation, ca
   const base=`http://127.0.0.1:${port}`;
   assert.equal((await fetch(`${base}/health`)).status,200);
   assert.match(await (await fetch(base)).text(),/Super Cubito/);
-  for(const file of ['/game.js','/netcode.js','/renderer.js'])assert.equal((await fetch(base+file)).status,200);
+  for(const file of ['/game.js','/levels.js','/netcode.js','/renderer.js'])assert.equal((await fetch(base+file)).status,200);
   assert.equal((await fetch(`${base}/missing`)).status,404);
   async function client(room=''){
     const ws=new WebSocket(`ws://127.0.0.1:${port}`);sockets.push(ws);ws.inbox=[];
@@ -28,7 +28,7 @@ test('real WebSocket rooms: synchronization, authoritative limits, isolation, ca
     throw new Error('Timed out waiting for server message');
   }
   const a=await client(),welcome=await wait(a,m=>m.type==='welcome');
-  assert.equal(welcome.totalLevels,4);assert.ok(welcome.level.width>7000);
+  assert.equal(welcome.totalLevels,4);assert.ok(welcome.level.width>6000);
   const b=await client(welcome.room);await wait(b,m=>m.type==='welcome');
   assert.equal((await wait(b,m=>m.type==='state'&&m.players.length===2)).phase,'playing');
   a.send(JSON.stringify({type:'next',revision:0}));
