@@ -27,7 +27,7 @@ for(const m of levels){
  test(`${m.name}: exposed boss takes one stomp and three hits unlock exit`,()=>{
   const w=createWorld();w.boss={started:true,hp:3,tick:0,open:100,charge:0};const a=player(m,'a',m.boss.x+540);
   for(let hit=0;hit<3;hit++){
-   w.boss.open=100;a.y=450;a.vy=3;
+   w.frame+=16;w.boss.open=100;a.y=450;a.vy=3;
    updateEncounters([a],new Map([['a',{...a,y:440}]]),m,w,respawn);
    assert.equal(w.boss.hp,2-hit);
   }

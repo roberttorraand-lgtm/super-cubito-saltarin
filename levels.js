@@ -1,3 +1,4 @@
+import { addEnemyCombat } from './combat.js';
 import { extendRoutes, addExploration } from './exploration.js';
 import { makeSoloLevels } from './solo.js';
 import { addEncounters } from './encounters.js';
@@ -82,3 +83,5 @@ addEncounters(levels);
 
 export const soloLevels=makeSoloLevels(levels);
 addExploration([...levels,...soloLevels]);
+
+addEnemyCombat([...levels,...soloLevels]);

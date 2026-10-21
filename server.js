@@ -6,10 +6,10 @@ import { levels, newPlayer, tickGroup, STEP_MS } from './game.js';
 import { takeInput, queueInput } from './transport.js';
 import { createRoom, checkCompletion, voteNext, voteRestart, roomLevels } from './rooms.js';
 
-const files=new Map([['/assets/residents.png',['public/assets/residents.png','image/png']],['/art.js',['public/art.js','text/javascript']],['/assets/creatures.png',['public/assets/creatures.png','image/png']],['/assets/landscapes.png',['public/assets/landscapes.png','image/png']],['/exploration.js',['exploration.js','text/javascript']],['/solo.js',['solo.js','text/javascript']],['/encounters.js',['encounters.js','text/javascript']],['/assets/boss-atlas.png',['public/assets/boss-atlas.png','image/png']],['/',['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/game.js',['game.js','text/javascript']],['/levels.js',['levels.js','text/javascript']],['/netcode.js',['public/netcode.js','text/javascript']],['/renderer.js',['public/renderer.js','text/javascript']],['/assets/meme-atlas.png',['public/assets/meme-atlas.png','image/png']]]);
+const files=new Map([['/combat.js',['combat.js','text/javascript']],['/assets/powerups.png',['public/assets/powerups.png','image/png']],['/assets/residents.png',['public/assets/residents.png','image/png']],['/art.js',['public/art.js','text/javascript']],['/assets/creatures.png',['public/assets/creatures.png','image/png']],['/assets/landscapes.png',['public/assets/landscapes.png','image/png']],['/exploration.js',['exploration.js','text/javascript']],['/solo.js',['solo.js','text/javascript']],['/encounters.js',['encounters.js','text/javascript']],['/assets/boss-atlas.png',['public/assets/boss-atlas.png','image/png']],['/',['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/game.js',['game.js','text/javascript']],['/levels.js',['levels.js','text/javascript']],['/netcode.js',['public/netcode.js','text/javascript']],['/renderer.js',['public/renderer.js','text/javascript']],['/assets/meme-atlas.png',['public/assets/meme-atlas.png','image/png']]]);
 const server=http.createServer(async(req,res)=>{
   let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{res.writeHead(400);return res.end();}
-  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.9.0"}');}
+  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.10.0"}');}
   const file=files.get(path);
   if(!file){res.writeHead(404);return res.end('No encontrado');}
   try{
@@ -43,7 +43,7 @@ wss.on('connection',(ws,req)=>{
       if(!Number.isSafeInteger(m.seq)||m.seq<=ws.receivedSeq||m.seq>ws.receivedSeq+300)return;
       ws.receivedSeq=m.seq;ws.lastInput=performance.now();
       // A client supplies intentions, never coordinates. At most one input is simulated per server step.
-      queueInput(ws.queue,{seq:m.seq,left:m.left===true,right:m.right===true,jump:m.jump===true,interact:m.interact===true},ws.player.jumpHeld,ws.player.interactHeld);return;
+      queueInput(ws.queue,{seq:m.seq,left:m.left===true,right:m.right===true,jump:m.jump===true,interact:m.interact===true,use:m.use===true,power:Number.isInteger(m.power)&&m.power>=1&&m.power<=3?m.power:undefined},ws.player.jumpHeld,ws.player.interactHeld,ws.player.useHeld);return;
     }
     if(m.type==='restart'&&ws.player){
       if(m.revision!==ws.room.revision)return;
@@ -95,7 +95,7 @@ const loop=setInterval(()=>{
     for(const room of rooms.values()){
       if(room.phase==='playing'){
         for(const ws of room.clients){
-          const input=takeInput(ws.queue,ws.player.jumpHeld,ws.player.interactHeld);
+          const input=takeInput(ws.queue,ws.player.jumpHeld,ws.player.interactHeld,ws.player.useHeld);
           if(input){ws.player.input=input;ws.lastSeq=input.seq;}
           else if(now-ws.lastInput>250)ws.player.input={left:false,right:false,jump:false};
         }

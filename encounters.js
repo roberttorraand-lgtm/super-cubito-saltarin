@@ -1,3 +1,4 @@
+import { bossRect, damageBoss } from './combat.js';
 import { teleport, nearbyInteraction } from './exploration.js';
 // Shared deterministic encounters: no client messages can award hits or rewards.
 export function addEncounters(maps){
@@ -20,8 +21,8 @@ export function addEncounters(maps){
 const overlaps=(p,r)=>p.x+32>r[0]&&p.x<r[0]+r[2]&&p.y+32>r[1]&&p.y<r[1]+r[3];
 export function bossView(map,world){
  const b=map.boss,s=world?.boss;if(!b||!s?.started||s.hp<=0)return null;
- const t=s.tick%240,center=b.x+550,rect=[center-52,480,104,104],hazards=[],warnings=[];
- if(s.open<=0){
+ const t=s.tick%240,center=b.x+550,rect=bossRect(map,world),hazards=[],warnings=[];
+ if(s.open<=0&&(s.slipUntil??0)<=(world?.frame??0)){
   if(map.id===0){const xs=[b.x+260,b.x+800];for(const x of xs)(t>=100&&t<140?hazards:t>=40&&t<100?warnings:[]).push([x,230,28,370]);}
   if(map.id===1){const x=b.x+(Math.floor(s.tick/240)%2?570:30);(t>=110&&t<150?hazards:t>=50&&t<110?warnings:[]).push([x,580,500,20]);}
   if(map.id===2)(t>=120&&t<135?hazards:t>=60&&t<120?warnings:[]).push([b.x+30,576,1040,24]);
@@ -62,7 +63,7 @@ export function updateEncounters(players,previous,map,world,respawn){
  const view=bossView(map,world);
  for(const p of team){
   const old=previous.get(p.id);
-  if(view.open&&overlaps(p,view.rect)&&old&&old.y+32<=view.rect[1]+15&&p.vy>=0){s.hp--;s.open=0;s.charge=0;s.valves=[];s.mirrors=[];p.vy=-12;p.invulnerable=75;if(s.hp===0)world.bossDefeated=true;break;}
+  if(view.open&&overlaps(p,view.rect)&&old&&old.y+32<=view.rect[1]+15&&p.vy>=0){damageBoss(world,1);p.vy=-12;p.invulnerable=75;if(s.hp===0)world.bossDefeated=true;break;}
  }
  // Recompute after a successful hit: never punish a player with an obsolete attack.
  const attack=bossView(map,world);

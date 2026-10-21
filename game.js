@@ -1,3 +1,4 @@
+import { preparePower, updateCombat, slipperyAt, damageEnemy } from './combat.js';
 import { updateEncounters } from './encounters.js';
 // The same deterministic 60 Hz simulation runs on the server and in the browser.
 export const STEP_MS = 1000 / 60;
@@ -8,13 +9,13 @@ export { levels, soloLevels };
 export const level = levels[0];
 export function newPlayer(id,name,color,map=level,spawnSlot=0){
   return {id,name,color,...map.spawn,x:map.spawn.x+spawnSlot*44,spawnSlot,vx:0,vy:0,grounded:false,checkpoint:-1,finished:false,deaths:0,lives:3,eliminated:false,invulnerable:0,
-    input:{left:false,right:false,jump:false,interact:false},jumpHeld:false,interactHeld:false,coyote:0,jumpBuffer:0,facing:1,supportId:null};
+    input:{left:false,right:false,jump:false,interact:false},jumpHeld:false,interactHeld:false,power:1,fuel:180,charge:0,useHeld:false,weaponCooldown:0,coyote:0,jumpBuffer:0,facing:1,supportId:null};
 }
 export function isComplete(players){return players.length>=2&&players.some(p=>p.finished)&&players.every(p=>p.finished||p.eliminated);}
 export function respawn(p,map){
   if(p.eliminated)return;
   p.deaths++;p.lives=Math.max(0,(p.lives??3)-1);
-  p.vx=p.vy=0;p.supportId=null;p.grounded=false;p.coyote=0;p.jumpBuffer=0;p.dialogue=null;
+  p.vx=p.vy=0;p.supportId=null;p.grounded=false;p.coyote=0;p.jumpBuffer=0;p.dialogue=null;p.charge=0;p.thrust=false;p.fireRequest=null;
   if(p.lives===0){p.eliminated=true;p.y=Math.min(map.height-40,p.y);return;}
   if(p.zone==='boss'&&map.boss){p.x=map.boss.x+90+(p.spawnSlot??0)*48;p.y=568;p.invulnerable=120;return;}
   if(p.zone&&p.returnPoint){p.x=p.returnPoint.x;p.y=p.returnPoint.y;p.zone=null;p.returnPoint=null;p.invulnerable=90;return;}
@@ -27,10 +28,11 @@ export function tick(p,map=level,world=null){
   if(p.finished||p.eliminated)return;
   p.invulnerable=Math.max(0,(p.invulnerable??0)-1);
   const direction=Number(p.input.right)-Number(p.input.left);
+  const banana=p.grounded&&!p.supportId&&slipperyAt(p.x+16,p.y+32,world);
   const icy=p.grounded&&!p.supportId&&(map.iceRegions??[]).some(r=>p.x+16>=r.x&&p.x+16<r.x+r.w);
-  const acceleration=p.grounded?(icy?.3:.95):.6;
+  const acceleration=p.grounded?(banana?.18:icy?.3:.95):.6;
   if(direction){p.vx+=direction*acceleration;p.facing=direction;}
-  else {p.vx*=p.grounded?(icy?.965:.72):.96;if(Math.abs(p.vx)<0.05)p.vx=0;}
+  else {p.vx*=p.grounded?(banana?.99:icy?.965:.72):.96;if(Math.abs(p.vx)<0.05)p.vx=0;}
   p.vx=Math.max(-5.8,Math.min(5.8,p.vx));
   p.coyote=p.grounded?6:Math.max(0,p.coyote-1);
   p.jumpBuffer=p.input.jump&&!p.jumpHeld?7:Math.max(0,p.jumpBuffer-1);
@@ -38,6 +40,7 @@ export function tick(p,map=level,world=null){
   // Releasing early produces a shorter hop; a held jump gives full height.
   if(!p.input.jump&&p.jumpHeld&&p.vy < -5)p.vy=-5;
   p.jumpHeld=p.input.jump;
+  if(p.thrust)p.vy=Math.max(-7.5,p.vy-1.25);
   p.vy=Math.min(p.vy+(map.gravity??.62),17);
   const solids=solidRects(map,world);
   p.supportId=null;
@@ -53,7 +56,7 @@ export function tick(p,map=level,world=null){
       p.vx=0;
     }
   }
-  const oldY=p.y;p.y+=p.vy;p.grounded=false;
+  const oldY=p.y;p.y+=p.vy;if(p.thrust&&p.y<100){p.y=100;p.vy=0;}p.grounded=false;
   for(const rect of solids){
     const [x,y,w,h]=rect;
     if(p.x+SIZE>x&&p.x<x+w&&p.y+SIZE>y&&p.y<y+h){
@@ -136,10 +139,11 @@ export function resolvePlayers(players,previous,map,world){
 }
 export function tickGroup(players,map,world,{mechanisms=true}={}){
   const previous=new Map(players.map(p=>[p.id,{...p}]));world.frame++;
-  for(const p of players){p.interactPressed=Boolean(p.input.interact)&&!p.interactHeld;p.interactHeld=Boolean(p.input.interact);tick(p,map,world);}
+  for(const p of players){p.interactPressed=Boolean(p.input.interact)&&!p.interactHeld;p.interactHeld=Boolean(p.input.interact);preparePower(p,map,world);tick(p,map,world);}
   resolvePlayers(players,previous,map,world);
   // Collision displacement can move a cube onto a hazard too.
   for(const p of players)if(!p.finished&&!p.eliminated&&!p.invulnerable&&hitsHazard(p,map,world))respawn(p,map);
+  updateCombat(players,map,world,solidRects(map,world),()=>enemyPositions(map,world),respawn);
   updateEnemies(players,previous,map,world);
   updateEncounters(players,previous,map,world,respawn);
   updateExploration(players,map,world);
@@ -184,7 +188,8 @@ export function enemyPositions(map,world){
  const frame=world?.frame??0,defeated=world?.defeatedEnemies??[];
  return (map.enemies??[]).filter(e=>!defeated.includes(e.id)).map(e=>{
   const phase=(frame+e.offset)/e.period*Math.PI*2;
-  return {...e,x:e.x+Math.sin(phase)*e.range,y:e.y+(e.kind==='toaster'?Math.sin(phase*1.5)*12:e.kind==='banana'?-Math.abs(Math.sin(phase))*45:0),facing:Math.cos(phase)>0?1:-1};
+  const state=world?.enemyStates?.[e.id];
+  return {...e,x:state?.x??(e.x+Math.sin(phase)*e.range),y:e.y+(e.kind==='toaster'?Math.sin(phase*1.5)*12:e.kind==='banana'?-Math.abs(Math.sin(phase))*45:0),facing:state?.facing??(Math.cos(phase)>0?1:-1),phase:state?.phase??'patrol',hp:state?.hp??e.combat?.hp??1};
  });
 }
 export function updateEnemies(players,previous,map,world){
@@ -194,7 +199,7 @@ export function updateEnemies(players,previous,map,world){
   if(p.x+SIZE<=enemy.x||p.x>=enemy.x+enemy.w||p.y+SIZE<=enemy.y||p.y>=enemy.y+enemy.h)continue;
   const old=previous.get(p.id);
   if(old&&old.deaths===p.deaths&&p.vy>=0&&old.y+SIZE<=enemy.y+12){
-   world.defeatedEnemies.push(enemy.id);p.y=enemy.y-SIZE;p.vy=-9;p.grounded=false;p.supportId=null;
+   damageEnemy(world,enemy,1);p.y=enemy.y-SIZE;p.vy=-9;p.grounded=false;p.supportId=null;
   }else if(!p.invulnerable)respawn(p,map);
  }
 }

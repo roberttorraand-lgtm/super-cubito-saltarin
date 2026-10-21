@@ -12,14 +12,14 @@ let world=createWorld(),projectedWorld=createWorld(),ghosts=[];
 let timeline=new SnapshotTimeline();
 const peerPresentation=new PeerPresentation();
 const keys=new Set();
-let interactQueued=false,jumpQueued=false;
+let interactQueued=false,jumpQueued=false,useQueued=false,selectedPower=1;
 $('#code').value=(new URLSearchParams(location.search).get('sala')||'').slice(0,6);
 function error(message){$('#error').textContent=message;}
 function resetLevel(m){
-  id=m.id;level=m.level;mode=m.mode??'coop';revision=m.revision;levelIndex=m.levelIndex;phase='playing';
+  selectedPower=1;useQueued=false;id=m.id;level=m.level;mode=m.mode??'coop';revision=m.revision;levelIndex=m.levelIndex;phase='playing';
   world=m.world??createWorld();projectedWorld=structuredClone(world);ghosts=[];
   local=m.player?structuredClone(m.player):newPlayer(id,$('#name').value,'#b4f669',level);previousLocal={...local};
-  pending=[];seq=0;correction={x:0,y:0};histories.clear();peerPresentation.clear();timeline=new SnapshotTimeline();players=[];keys.clear();interactQueued=jumpQueued=false;accumulator=0;
+  pending=[];seq=0;correction={x:0,y:0};histories.clear();peerPresentation.clear();timeline=new SnapshotTimeline();players=[];keys.clear();interactQueued=jumpQueued=useQueued=false;accumulator=0;
   renderer.setLevel(level);$('#boss-hud').hidden=true;$('#victory').hidden=true;$('#restart-panel').hidden=true;$('#next').disabled=false;
   $('#level-label').textContent=`MUNDO ${String(levelIndex+1).padStart(2,'0')} / ${level.name.toUpperCase()}`;
   $('#level-info').textContent=`${levelIndex+1} / ${m.totalLevels} · ${level.subtitle}`;
@@ -59,7 +59,7 @@ function updateState(m){
     }));
   }
   $('#boss-hud').hidden=local?.zone!=='boss';
-  if(local?.zone==='boss')$('#boss-hud').textContent=world.boss?.hp===0?'JEFE DERROTADO':`JEFE · ${'◆'.repeat(world.boss?.hp??3)}${'◇'.repeat(3-(world.boss?.hp??3))}`;
+  if(local?.zone==='boss')$('#boss-hud').textContent=world.boss?.hp===0?'JEFE DERROTADO':`JEFE · ${'◆'.repeat(Math.ceil(world.boss?.hp??3))}${'◇'.repeat(3-Math.ceil(world.boss?.hp??3))}`;
   const lives=authoritative?.lives??3;
   const heartText='♥'.repeat(lives)+'♡'.repeat(3-lives);
   if($('#hearts').textContent!==heartText)$('#hearts').textContent=heartText;
@@ -130,6 +130,7 @@ function connect(joinExisting,solo=false){
 }
 $('#join-form').addEventListener('submit',e=>{e.preventDefault();connect(false);});
 $('#join').addEventListener('click',()=>connect(true));
+for(const b of document.querySelectorAll('[data-power]'))b.addEventListener('click',()=>{selectedPower=Number(b.dataset.power);});
 $('#solo').addEventListener('click',()=>connect(false,true));
 $('#next').addEventListener('click',()=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:phase==='defeated'?'restart':'next',revision}));});
 $('#restart').addEventListener('click',()=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'restart',revision}));});
@@ -141,13 +142,13 @@ $('#fullscreen').addEventListener('click',async()=>{
   try{if(document.fullscreenElement)await document.exitFullscreen();else await $('.game-shell').requestFullscreen();}
   catch{$('#status').textContent='PANTALLA COMPLETA NO DISPONIBLE EN ESTE NAVEGADOR';}
 });
-const controls=['ArrowLeft','ArrowRight','ArrowUp','KeyA','KeyD','KeyW','Space','KeyE','ArrowDown'];
-addEventListener('keydown',e=>{if(!id||!controls.includes(e.code)||e.target.closest('input'))return;e.preventDefault();keys.add(e.code);if(!e.repeat&&['KeyE','ArrowDown'].includes(e.code))interactQueued=true;if(!e.repeat&&['Space','ArrowUp','KeyW'].includes(e.code))jumpQueued=true;});
+const controls=['ArrowLeft','ArrowRight','ArrowUp','KeyA','KeyD','KeyW','Space','KeyE','ArrowDown','KeyR','Digit1','Digit2','Digit3'];
+addEventListener('keydown',e=>{if(!id||!controls.includes(e.code)||e.target.closest('input'))return;e.preventDefault();keys.add(e.code);if(['Digit1','Digit2','Digit3'].includes(e.code))selectedPower=Number(e.code.at(-1));if(e.code==='KeyR'&&!e.repeat)useQueued=true;if(!e.repeat&&['KeyE','ArrowDown'].includes(e.code))interactQueued=true;if(!e.repeat&&['Space','ArrowUp','KeyW'].includes(e.code))jumpQueued=true;});
 addEventListener('keyup',e=>{keys.delete(e.code);if(id&&controls.includes(e.code))e.preventDefault();});
-addEventListener('blur',()=>{keys.clear();interactQueued=jumpQueued=false;});
-document.addEventListener('visibilitychange',()=>{keys.clear();interactQueued=jumpQueued=false;accumulator=0;lastTime=performance.now();});
+addEventListener('blur',()=>{keys.clear();interactQueued=jumpQueued=useQueued=false;});
+document.addEventListener('visibilitychange',()=>{keys.clear();interactQueued=jumpQueued=useQueued=false;accumulator=0;lastTime=performance.now();});
 for(const b of document.querySelectorAll('[data-key]')){
-  b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.key);if(b.dataset.key==='KeyE')interactQueued=true;if(b.dataset.key==='Space')jumpQueued=true;});
+  b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.key);if(b.dataset.key==='KeyR')useQueued=true;if(b.dataset.key==='KeyE')interactQueued=true;if(b.dataset.key==='Space')jumpQueued=true;});
   for(const event of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(event,()=>keys.delete(b.dataset.key));
 }
 function draw(now){
@@ -156,8 +157,8 @@ function draw(now){
     accumulator+=elapsed;
     while(accumulator>=STEP_MS){
       accumulator-=STEP_MS;previousLocal={...local};
-      const input={type:'input',revision,seq:++seq,left:keys.has('ArrowLeft')||keys.has('KeyA'),right:keys.has('ArrowRight')||keys.has('KeyD'),jump:jumpQueued||keys.has('Space')||keys.has('ArrowUp')||keys.has('KeyW'),interact:interactQueued||keys.has('KeyE')||keys.has('ArrowDown')};
-      interactQueued=jumpQueued=false;
+      const input={type:'input',revision,seq:++seq,left:keys.has('ArrowLeft')||keys.has('KeyA'),right:keys.has('ArrowRight')||keys.has('KeyD'),jump:jumpQueued||keys.has('Space')||keys.has('ArrowUp')||keys.has('KeyW'),interact:interactQueued||keys.has('KeyE')||keys.has('ArrowDown'),use:useQueued||keys.has('KeyR'),power:selectedPower};
+      interactQueued=jumpQueued=useQueued=false;
       local.input=input;predictFrame(local,ghosts,level,projectedWorld);pending.push(input);
       if(pending.length>120)pending.shift();
       if(socket.bufferedAmount<65536)socket.send(JSON.stringify(input));
@@ -186,7 +187,17 @@ function draw(now){
   const dialogue=id&&local?.dialogue&&local.dialogue.until>displayWorld.frame&&phase==='playing'?local.dialogue:null;
   $('#dialogue').hidden=!dialogue;
   if(dialogue){if($('#dialogue-name').textContent!==dialogue.name)$('#dialogue-name').textContent=dialogue.name;if($('#dialogue-text').textContent!==dialogue.text)$('#dialogue-text').textContent=dialogue.text;}
-  renderer.draw(visible,id,now/1000,dt,displayWorld);
+  $('#powerups').hidden=!id;
+  if(id&&local){
+    for(const b of document.querySelectorAll('[data-power]')){const on=Number(b.dataset.power)===selectedPower;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',String(on));}
+    const fuel=local.fuel??180,charge=local.charge??0,cool=local.weaponCooldown??0;
+    $('#power-meter-fill').style.width=`${selectedPower===2?fuel/180*100:selectedPower===1?Math.min(100,charge/60*100):Math.max(0,100-cool/120*100)}%`;
+    $('#power-meter').setAttribute('aria-valuenow',String(Math.round(selectedPower===2?fuel/180*100:selectedPower===1?Math.min(100,charge/60*100):Math.max(0,100-cool/120*100))));
+    $('#power-meter').className=selectedPower===2?'fuel':charge>=60?'charged':'';
+    const label=local.eliminated?'SIN VIDAS':selectedPower===2?`COMBUSTIBLE ${Math.round(fuel/180*100)}%`:selectedPower===1?(charge>=60?'EXPLOSIVO LISTO · SUELTA R':charge?'CARGANDO · MANTÉN R':cool?'RECARGANDO…':'R · TOQUE / MANTÉN 1 s'):cool?'PREPARANDO BANANA…':'R · BANANA: TODOS RESBALAN';
+    if($('#power-status').textContent!==label)$('#power-status').textContent=label;
+  }
+  renderer.draw(visible,id,now/1000,dt,{...displayWorld,projectiles:projectedWorld.projectiles??world.projectiles,puddles:projectedWorld.puddles??world.puddles,explosions:projectedWorld.explosions??world.explosions});
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);

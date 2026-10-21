@@ -1,6 +1,6 @@
 # Super Cubito Saltarín · Edición Exploradores
 
-Plataformas de navegador con campaña individual y cooperativo online para 2–4 jugadores. Cuatro mundos, tres vidas por mundo, 56 enemigos, casas habitadas, archivos de memes ocultos y cuatro jefes inspirados en las imágenes aportadas por el usuario.
+Plataformas de navegador con campaña individual y cooperativo online para 2–4 jugadores. Cuatro mundos, tres vidas por mundo, tres power-ups, 56 enemigos, casas habitadas, archivos de memes ocultos y cuatro jefes inspirados en las imágenes aportadas por el usuario.
 
 ## Jugar
 
@@ -34,6 +34,26 @@ Hay dieciséis archivos inspirados en memes de 2016 y una sala secreta por mundo
 
 La primera salida de una sala secreta concede a cada jugador tres segundos de escudo. No recupera vidas. La cámara del minimapa se limita a la zona actual y no revela la distribución de interiores ocultos.
 
+## Power-ups y combate (0.10)
+
+Selecciona con **1, 2 y 3**, o toca los iconos transparentes del inventario en móvil. **R** y el botón táctil R usan el seleccionado. Los tres están disponibles desde el principio; cambiar de equipo cancela la carga y conserva combustible y tiempos de recarga.
+
+| Power-up | Uso | Límites y efectos |
+| --- | --- | --- |
+| 1 · Escopeta inspirada en Ultrakill | Pulsa y suelta R para un proyectil débil. Mantén al menos un segundo y suelta para el explosivo. | El explosivo daña en área y atraviesa la protección frontal de guardianes. Las balas y explosiones no dañan al propietario ni a aliados. Los jefes reciben daño solo cuando su punto débil está abierto. |
+| 2 · Jetpack | Mantén R para subir; suelta para caer. | Tres segundos de combustible continuo, barra visible y recarga al pisar suelo sin mantener R. Cambiar de equipo no rellena el depósito. La altura se limita para mantener al cubito dentro de la pantalla. |
+| 3 · Banana | Pulsa R para lanzar una granada en arco. | Deja una zona deslizante durante siete segundos. Afecta al lanzador y aliados, enemigos terrestres y jefes. No causa daño directo; los peligros del escenario siguen siendo peligrosos. Dos segundos entre lanzamientos y como máximo dos zonas por jugador. |
+
+Parte de los enemigos tiene varios puntos de vida y un ciclo de patrulla, aviso, ataque y recuperación:
+
+- **Cargadores:** fijan una dirección, avisan y embisten; recuperarse deja una oportunidad para atacarlos.
+- **Guardianes:** bloquean proyectiles débiles por delante y lanzan dos ondas sucesivas. Ataca por detrás, aprovecha la recuperación, salta o usa el explosivo.
+- **Artilleros voladores:** muestran la dirección del disparo y lanzan tres ráfagas en abanico antes de descansar.
+
+La banana interrumpe los ataques de enemigos terrestres y los hace derrapar. Un jefe que pisa una zona nueva también derrapa, interrumpe su ataque y expone brevemente su punto débil, con un intervalo de protección entre derribos. Las barras y avisos permiten anticipar estos patrones.
+
+El servidor valida combustible, carga, cadencia, daño y superficies resbaladizas. Los proyectiles comprueban todo el trayecto entre pasos para evitar atravesar paredes estrechas. Su cantidad, duración y efectos están limitados; también se predicen localmente y se reconcilian con el servidor.
+
 ## Castillos y jefes
 
 Entra al edificio del final con **E**. La pelea comienza cuando llegan todos los jugadores vivos. Mientras esperas puedes volver al exterior desde la entrada.
@@ -47,7 +67,7 @@ Los ataques avisan antes de causar daño. Cuando cae el escudo, salta sobre el r
 
 ## Arte y fluidez
 
-Los fondos pintados de los cuatro mundos, las criaturas con transparencia y los vecinos ilustrados son recursos locales originales generados para el juego. Los retratos de los jefes se adaptaron de las referencias del usuario. No se requieren servidores de imágenes ni fuentes externas.
+Los fondos pintados de los cuatro mundos, las criaturas con transparencia, los iconos de equipo y los vecinos ilustrados son recursos locales originales generados para el juego. Los retratos de los jefes se adaptaron de las referencias del usuario. No se requieren servidores de imágenes ni fuentes externas.
 
 El renderizador usa `requestAnimationFrame`, paralaje, texturas reutilizadas, descarte de elementos fuera de cámara, un máximo de 120 partículas y resolución limitada a DPR 2. Los retratos de jefes y los habitantes se cargan al necesitarlos. Las imágenes usan validación HTTP con ETag. El movimiento reducido desactiva efectos decorativos. Las animaciones visuales nunca cambian las colisiones.
 
@@ -75,4 +95,4 @@ La revisión en navegador comprueba crear y unirse, moverse entre casas y exteri
 
 `render.yaml` configura un servicio Node con instalación y pruebas antes de arrancar y comprobación `/health`. Requiere WebSockets persistentes y una sola instancia. En otro alojamiento, configura HTTPS/WSS y la actualización WebSocket del proxy.
 
-Las salas viven en memoria: un despliegue o reinicio interrumpe las partidas. No hay cuentas, reconexión automática ni guardado permanente; vidas, conversaciones y archivos se conservan durante la partida del mundo. Las partidas individuales también requieren conexión. El plan gratuito de Render puede entrar en reposo y tardar más en la primera carga. La historia larga y los power-ups siguen pendientes.
+Las salas viven en memoria: un despliegue o reinicio interrumpe las partidas. No hay cuentas, reconexión automática ni guardado permanente; vidas, conversaciones y archivos se conservan durante la partida del mundo. Las partidas individuales también requieren conexión. El plan gratuito de Render puede entrar en reposo y tardar más en la primera carga. La historia larga sigue pendiente.

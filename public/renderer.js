@@ -46,9 +46,10 @@ export class Renderer {
       for(let dx=0;dx<w;dx+=16){ctx.fillStyle='#d76e78';ctx.beginPath();ctx.moveTo(x+dx,y+h);ctx.lineTo(x+dx+8,y);ctx.lineTo(x+dx+16,y+h);ctx.fill();ctx.fillStyle='#ffc3b0';ctx.beginPath();ctx.moveTo(x+dx+8,y);ctx.lineTo(x+dx+8,y+h);ctx.lineTo(x+dx,y+h);ctx.fill();}
     }
     this.mechanisms(l,world,time,left,right);
-    this.chaos(l,world,time,left,right);
     this.encounters(l,world,left,right);
     this.village(l,world,time,left,right,me);
+    this.chaos(l,world,time,left,right);
+    this.art.combat(ctx,l,world,time,left,right);
     if(me&&l.secret)this.art.secretMark(ctx,l,me,time,this.reduced);
     l.checkpoints.forEach((point,i)=>{if(point.x>left&&point.x<right)this.flag(point.x,point.y,i<=(me?.checkpoint??-1)?'#b4f669':'#ffffffaa',time,'GUARDAR PROGRESO');});
     if(world.bossDefeated&&l.goal.x>left&&l.goal.x<right)this.flag(l.goal.x,l.goal.y,t.accent,time,l.mode==='solo'?'MUNDO SUPERADO':'META DEL EQUIPO',true);
@@ -74,6 +75,7 @@ export class Renderer {
       const blink=!this.reduced&&Math.sin(time*.6+p.color.charCodeAt(2))>.998;
       const eye=p.facing*1.5;ctx.fillStyle='#293e41';ctx.fillRect(-9+eye,-22,4,blink?2:6);ctx.fillRect(4+eye,-22,4,blink?2:6);ctx.fillRect(-3+eye,-11,6,2);
       ctx.restore();
+      this.art.equipment(ctx,p,time);
       ctx.textAlign='center';ctx.font='600 12px sans-serif';ctx.fillStyle=l.id===3?'#eee5ff':'#294d50';ctx.fillText(p.name+(p.id===localId?' · TÚ':''),p.x+16,p.y-15);
       if(p.id===localId){ctx.fillStyle=t.accent;ctx.beginPath();ctx.moveTo(p.x+12,p.y-34);ctx.lineTo(p.x+20,p.y-34);ctx.lineTo(p.x+16,p.y-28);ctx.fill();}
     }
@@ -187,6 +189,7 @@ export class Renderer {
     for(const enemy of enemyPositions(map,world)){
       if(enemy.x+enemy.w<left||enemy.x>right)continue;
       this.art.creature(ctx,enemy,time,this.reduced);
+      this.art.enemyIntent(ctx,enemy,world.enemyStates?.[enemy.id]);
     }
   }
 
