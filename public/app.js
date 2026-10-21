@@ -1,3 +1,4 @@
+import { nearbyInteraction, houseFor } from '/exploration.js';
 import { levels, newPlayer, createWorld, STEP_MS } from '/game.js';
 import { prediction, predictFrame, interpolate, SnapshotTimeline, PeerPresentation } from '/netcode.js';
 import { Renderer } from '/renderer.js';
@@ -11,14 +12,15 @@ let world=createWorld(),projectedWorld=createWorld(),ghosts=[];
 let timeline=new SnapshotTimeline();
 const peerPresentation=new PeerPresentation();
 const keys=new Set();
+let interactQueued=false,jumpQueued=false;
 $('#code').value=(new URLSearchParams(location.search).get('sala')||'').slice(0,6);
 function error(message){$('#error').textContent=message;}
 function resetLevel(m){
   id=m.id;level=m.level;mode=m.mode??'coop';revision=m.revision;levelIndex=m.levelIndex;phase='playing';
   world=m.world??createWorld();projectedWorld=structuredClone(world);ghosts=[];
   local=m.player?structuredClone(m.player):newPlayer(id,$('#name').value,'#b4f669',level);previousLocal={...local};
-  pending=[];seq=0;correction={x:0,y:0};histories.clear();peerPresentation.clear();timeline=new SnapshotTimeline();players=[];keys.clear();accumulator=0;
-  renderer.setLevel(level);$('#victory').hidden=true;$('#restart-panel').hidden=true;$('#next').disabled=false;
+  pending=[];seq=0;correction={x:0,y:0};histories.clear();peerPresentation.clear();timeline=new SnapshotTimeline();players=[];keys.clear();interactQueued=jumpQueued=false;accumulator=0;
+  renderer.setLevel(level);$('#boss-hud').hidden=true;$('#victory').hidden=true;$('#restart-panel').hidden=true;$('#next').disabled=false;
   $('#level-label').textContent=`MUNDO ${String(levelIndex+1).padStart(2,'0')} / ${level.name.toUpperCase()}`;
   $('#level-info').textContent=`${levelIndex+1} / ${m.totalLevels} · ${level.subtitle}`;
   $('#level-info').classList.remove('announce');void $('#level-info').offsetWidth;$('#level-info').classList.add('announce');
@@ -26,7 +28,7 @@ function resetLevel(m){
 function updateState(m){
   if(m.revision!==revision)return;
   players=m.players;phase=m.phase;world=m.world??createWorld();
-  if(mode==='solo')$('#room-label').textContent=`EN SOLITARIO · ARCHIVOS ${world.eggs?.length??0} / ${level.easterEggs.length}`;
+  $('#room-label').textContent=`${mode==='solo'?'EN SOLITARIO':`SALA ${room}`} · ARCHIVOS ${world.eggs?.length??0} / ${level.easterEggs.length}`;
   const now=performance.now();timeline.push(m.frame,now);
   const authoritative=players.find(p=>p.id===id);
   if(authoritative){
@@ -36,7 +38,7 @@ function updateState(m){
     if(local&&local.deaths===corrected.deaths&&Math.hypot(local.x-corrected.x,local.y-corrected.y)<150&&phase==='playing'){
       correction.x+=local.x-corrected.x;correction.y+=local.y-corrected.y;
     }else correction={x:0,y:0};
-    const continuous=local&&previousLocal&&local.deaths===corrected.deaths&&phase==='playing';
+    const continuous=local&&previousLocal&&local.deaths===corrected.deaths&&local.zone===corrected.zone&&phase==='playing';
     const dx=continuous?local.x-previousLocal.x:0,dy=continuous?local.y-previousLocal.y:0;
     local=corrected;previousLocal={...local,x:local.x-dx,y:local.y-dy};
   }
@@ -56,6 +58,8 @@ function updateState(m){
       el.append(swatch,document.createTextNode(p.name+(p.id===id?' (tú)':'')+(p.eliminated?' · KO':p.finished?' ✓':` · ♥${p.lives??3}`)));return el;
     }));
   }
+  $('#boss-hud').hidden=local?.zone!=='boss';
+  if(local?.zone==='boss')$('#boss-hud').textContent=world.boss?.hp===0?'JEFE DERROTADO':`JEFE · ${'◆'.repeat(world.boss?.hp??3)}${'◇'.repeat(3-(world.boss?.hp??3))}`;
   const lives=authoritative?.lives??3;
   const heartText='♥'.repeat(lives)+'♡'.repeat(3-lives);
   if($('#hearts').textContent!==heartText)$('#hearts').textContent=heartText;
@@ -76,12 +80,13 @@ function updateState(m){
   }
   const objective=(level.objectives??[]).find(o=>!world.activated.includes(o.group));
   const pads=objective?level.plates.filter(p=>p.group===objective.group):[];
-  const nearby=objective&&pads.length&&Math.min(...pads.map(p=>p.x))-(local?.x??0)<750;
+  const nearby=!local?.zone&&objective&&pads.length&&Math.min(...pads.map(p=>p.x))-(local?.x??0)<750;
   const hint=local?.zone==='boss'?level.boss.hint:local?.zone==='secret'?'SALA SECRETA · Llega a la puerta del fondo para obtener un escudo.':nearby?objective.hint:null;
   const movementTip=level.id===2?'Hielo: frena con tiempo y no te detengas sobre los puentes frágiles.':level.id===3?'Gravedad lunar: mantén el salto y calcula los pulsos de energía.':level.subtitle;
-  const npc=(level.villagers??[]).find(n=>!local?.zone&&Math.abs(n.x-(local?.x??0))<125&&Math.abs(n.y-32-(local?.y??0))<85);
+  const region=(level.regions??[]).filter(r=>r.x<=(local?.x??0)).at(-1);
+  const home=houseFor(level,local);
   const egg=world.lastEgg?.until>world.frame?world.lastEgg.caption:null;
-  const instruction=(npc?`${npc.name}: ${npc.dialogue}`:egg)??hint??`${levelIndex+1} / ${levels.length} · ${movementTip}`;
+  const instruction=egg??hint??(home?`INTERIOR · ${home.owner}`:`${levelIndex+1} / ${levels.length} · ${region?.name??movementTip}`);
   if($('#level-info').textContent!==instruction)$('#level-info').textContent=instruction;
   $('#status').textContent=local?.eliminated?'SIN VIDAS · MODO ESPECTADOR':local?.finished?'EN LA META · ESPERANDO AL EQUIPO':mode!=='solo'&&players.length<2?'INVITA A ALGUIEN PARA COMPLETAR EL NIVEL':hint??(local?.checkpoint>=0?'PUNTO DE CONTROL GUARDADO':'¡JUNTOS HASTA LA BANDERA!');
 }
@@ -116,7 +121,7 @@ function connect(joinExisting,solo=false){
     if(id){
       id=null;players=[];level=null;local=null;pending=[];histories.clear();keys.clear();playerSignature='';
       renderer.setLevel(levels[0]);$('#players').textContent='Tu equipo aparecerá aquí';
-      $('#lobby').hidden=false;$('#life-hud').hidden=true;$('#restart-panel').hidden=true;$('#victory').hidden=true;$('#touch').hidden=true;$('#copy').hidden=true;$('#fullscreen').hidden=true;
+      $('#lobby').hidden=false;$('#boss-hud').hidden=true;$('#life-hud').hidden=true;$('#restart-panel').hidden=true;$('#victory').hidden=true;$('#touch').hidden=true;$('#copy').hidden=true;$('#fullscreen').hidden=true;
       $('#code').value=room;$('#room-label').textContent='CONEXIÓN INTERRUMPIDA';$('#connection').textContent='Sin conexión';
       error(mode==='solo'?'Se ha perdido la conexión. Pulsa Jugar solo para empezar una nueva aventura.':'Se ha perdido la conexión. Pulsa Entrar para volver a tu sala.');
     }else if($('#error').textContent==='Conectando…')error('No se pudo conectar con el servidor. Inténtalo de nuevo.');
@@ -136,13 +141,13 @@ $('#fullscreen').addEventListener('click',async()=>{
   try{if(document.fullscreenElement)await document.exitFullscreen();else await $('.game-shell').requestFullscreen();}
   catch{$('#status').textContent='PANTALLA COMPLETA NO DISPONIBLE EN ESTE NAVEGADOR';}
 });
-const controls=['ArrowLeft','ArrowRight','ArrowUp','KeyA','KeyD','KeyW','Space'];
-addEventListener('keydown',e=>{if(!id||!controls.includes(e.code)||e.target.closest('input'))return;e.preventDefault();keys.add(e.code);});
+const controls=['ArrowLeft','ArrowRight','ArrowUp','KeyA','KeyD','KeyW','Space','KeyE','ArrowDown'];
+addEventListener('keydown',e=>{if(!id||!controls.includes(e.code)||e.target.closest('input'))return;e.preventDefault();keys.add(e.code);if(!e.repeat&&['KeyE','ArrowDown'].includes(e.code))interactQueued=true;if(!e.repeat&&['Space','ArrowUp','KeyW'].includes(e.code))jumpQueued=true;});
 addEventListener('keyup',e=>{keys.delete(e.code);if(id&&controls.includes(e.code))e.preventDefault();});
-addEventListener('blur',()=>keys.clear());
-document.addEventListener('visibilitychange',()=>{keys.clear();accumulator=0;lastTime=performance.now();});
+addEventListener('blur',()=>{keys.clear();interactQueued=jumpQueued=false;});
+document.addEventListener('visibilitychange',()=>{keys.clear();interactQueued=jumpQueued=false;accumulator=0;lastTime=performance.now();});
 for(const b of document.querySelectorAll('[data-key]')){
-  b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.key);});
+  b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(b.dataset.key);if(b.dataset.key==='KeyE')interactQueued=true;if(b.dataset.key==='Space')jumpQueued=true;});
   for(const event of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(event,()=>keys.delete(b.dataset.key));
 }
 function draw(now){
@@ -151,7 +156,8 @@ function draw(now){
     accumulator+=elapsed;
     while(accumulator>=STEP_MS){
       accumulator-=STEP_MS;previousLocal={...local};
-      const input={type:'input',revision,seq:++seq,left:keys.has('ArrowLeft')||keys.has('KeyA'),right:keys.has('ArrowRight')||keys.has('KeyD'),jump:keys.has('Space')||keys.has('ArrowUp')||keys.has('KeyW')};
+      const input={type:'input',revision,seq:++seq,left:keys.has('ArrowLeft')||keys.has('KeyA'),right:keys.has('ArrowRight')||keys.has('KeyD'),jump:jumpQueued||keys.has('Space')||keys.has('ArrowUp')||keys.has('KeyW'),interact:interactQueued||keys.has('KeyE')||keys.has('ArrowDown')};
+      interactQueued=jumpQueued=false;
       local.input=input;predictFrame(local,ghosts,level,projectedWorld);pending.push(input);
       if(pending.length>120)pending.shift();
       if(socket.bufferedAmount<65536)socket.send(JSON.stringify(input));
@@ -162,7 +168,7 @@ function draw(now){
   const remoteTime=timeline.render(now);
   if(id&&local){
     const alpha=accumulator/STEP_MS;
-    const snap=local.deaths!==previousLocal?.deaths||phase!=='playing';
+    const snap=local.deaths!==previousLocal?.deaths||local.zone!==previousLocal?.zone||phase!=='playing';
     visible.push({...local,x:snap?local.x:previousLocal.x+(local.x-previousLocal.x)*alpha+correction.x,y:snap?local.y:previousLocal.y+(local.y-previousLocal.y)*alpha+correction.y});
     for(const history of histories.values()){
       let p=interpolate(history,remoteTime),mode='snapshot';
@@ -173,6 +179,13 @@ function draw(now){
     if(now-lastPing>1500){lastPing=now;socket.send(JSON.stringify({type:'ping',sent:now}));}
   }else visible.push({...newPlayer('demo','Tu aventura empieza aquí','#b4f669'),grounded:true});
   const displayWorld=id&&phase==='playing'?{...world,frame:projectedWorld.frame}:world;
+  const action=id&&local&&phase==='playing'?nearbyInteraction(local,level,displayWorld):null;
+  $('#interaction').hidden=!action;
+  const prompt=action?`E / ↓ · ${action.label}`:'';
+  if($('#interaction').textContent!==prompt)$('#interaction').textContent=prompt;
+  const dialogue=id&&local?.dialogue&&local.dialogue.until>displayWorld.frame&&phase==='playing'?local.dialogue:null;
+  $('#dialogue').hidden=!dialogue;
+  if(dialogue){if($('#dialogue-name').textContent!==dialogue.name)$('#dialogue-name').textContent=dialogue.name;if($('#dialogue-text').textContent!==dialogue.text)$('#dialogue-text').textContent=dialogue.text;}
   renderer.draw(visible,id,now/1000,dt,displayWorld);
   requestAnimationFrame(draw);
 }

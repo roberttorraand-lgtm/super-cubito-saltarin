@@ -15,10 +15,11 @@ test('real WebSocket rooms: synchronization, authoritative limits, isolation, ca
   const base=`http://127.0.0.1:${port}`;
   assert.equal((await fetch(`${base}/health`)).status,200);
   assert.match(await (await fetch(base)).text(),/Super Cubito/);
-  for(const file of ['/game.js','/levels.js','/netcode.js','/renderer.js','/encounters.js'])assert.equal((await fetch(base+file)).status,200);
+  for(const file of ['/game.js','/levels.js','/netcode.js','/renderer.js','/encounters.js','/exploration.js','/solo.js','/art.js'])assert.equal((await fetch(base+file)).status,200);
   assert.equal((await fetch(`${base}/missing`)).status,404);
   const png=await fetch(base+'/assets/meme-atlas.png');assert.equal(png.status,200);
-  assert.equal((await fetch(base+'/assets/boss-atlas.png')).status,200);
+  for(const asset of ['boss-atlas','creatures','landscapes','residents'])assert.equal((await fetch(base+'/assets/'+asset+'.png')).status,200);
+  assert.equal((await fetch(base+'/assets/creatures.png',{headers:{'If-None-Match':(await fetch(base+'/assets/creatures.png')).headers.get('etag')}})).status,304);
   const signature=new Uint8Array(await png.arrayBuffer()).slice(0,8);assert.deepEqual([...signature],[137,80,78,71,13,10,26,10]);
   async function client(room=''){
     const ws=new WebSocket(`ws://127.0.0.1:${port}`);sockets.push(ws);ws.inbox=[];
@@ -70,4 +71,17 @@ test('solo WebSocket room provides adapted maps and refuses other players',{time
  const first=await join({mode:'solo'});assert.equal(first.mode,'solo');assert.equal(first.level.mode,'solo');assert.equal(first.level.villagers.length,3);assert.equal(first.level.plates.length,1);
  const intruder=await join({room:first.room});assert.equal(intruder.type,'error');assert.match(intruder.message,/individual/);
  const second=await join({mode:'solo'});assert.notEqual(first.room,second.room);
+});
+
+test('authoritative interaction: burst E enters a real house and cannot teleport through forged input',{timeout:8000},async t=>{
+ const proc=spawn(process.execPath,['server.js'],{env:{...process.env,PORT:'0',HOST:'127.0.0.1'},stdio:['ignore','pipe','pipe']});
+ const sockets=[];t.after(async()=>{for(const s of sockets)s.terminate();const exited=once(proc,'exit');proc.kill();await exited;});
+ const port=await new Promise((resolve,reject)=>{proc.stdout.on('data',d=>{const m=String(d).match(/escuchando en (\d+)/);if(m)resolve(+m[1]);});proc.once('error',reject);proc.once('exit',()=>reject(new Error('Server exited')));});
+ const s=new WebSocket(`ws://127.0.0.1:${port}`);sockets.push(s);const inbox=[];s.on('message',d=>inbox.push(JSON.parse(d)));await once(s,'open');s.send(JSON.stringify({type:'join',mode:'solo',name:'Explorer'}));
+ async function wait(fn){for(let i=0;i<250;i++){const n=inbox.findIndex(fn);if(n>=0)return inbox.splice(n,1)[0];await new Promise(r=>setTimeout(r,10));}throw new Error('Missing authoritative state');}
+ const welcome=await wait(m=>m.type==='welcome'),h=welcome.level.houses[0];await wait(m=>m.type==='state'&&m.players[0].grounded);
+ for(let seq=1;seq<=200;seq++)s.send(JSON.stringify({type:'input',revision:0,seq,interact:seq===1,x:999999,zone:'boss',bossDefeated:true}));
+ const entered=await wait(m=>m.type==='state'&&m.players[0].zone===h.id),p=entered.players[0];
+ assert.ok(p.x>=h.room.x&&p.x<h.room.x+h.room.w);assert.equal(p.lives,3);assert.equal(p.finished,false);assert.equal(entered.world.boss.hp,3);assert.notEqual(entered.world.bossDefeated,true);
+ assert.equal(p.checkpoint,-1);assert.ok(p.seq>=197);
 });

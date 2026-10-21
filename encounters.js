@@ -1,3 +1,4 @@
+import { teleport, nearbyInteraction } from './exploration.js';
 // Shared deterministic encounters: no client messages can award hits or rewards.
 export function addEncounters(maps){
  const names=["That's la Peace",'Soldador Bai de Feis','Gigachad · Combo 67','Señor del Cubo Carmesí'];
@@ -28,7 +29,6 @@ export function bossView(map,world){
  }
  return {rect,hazards,warnings,beat:t>=60&&t<120,open:s.open>0};
 }
-function teleport(p,x,y,zone){p.x=x;p.y=y;p.vx=p.vy=0;p.supportId=null;p.grounded=false;p.zone=zone;p.portalCooldown=90;}
 export function updateEncounters(players,previous,map,world,respawn){
  if(!map.boss)return;
  const active=players.filter(p=>!p.eliminated&&!p.finished),b=map.boss;
@@ -36,12 +36,13 @@ export function updateEncounters(players,previous,map,world,respawn){
  for(const p of active){
   p.portalCooldown=Math.max(0,(p.portalCooldown??0)-1);
   if(p.portalCooldown)continue;
-  const d=map.secret.door;
-  if(!p.zone&&p.grounded&&Math.abs(p.x-d.x)<35){teleport(p,map.secret.x+50,568,'secret');}
-  else if(p.zone==='secret'&&p.x>map.secret.x+790){
+  const action=p.interactPressed?nearbyInteraction(p,map,world):null;
+  if(action?.type==='secret'){p.returnPoint=map.secret.return;teleport(p,map.secret.x+50+(p.spawnSlot??0)*38,568,'secret');}
+  else if(action?.type==='secretExit'){
    if(!world.secrets.includes(p.id)){world.secrets.push(p.id);p.invulnerable=180;}
-   teleport(p,map.secret.return.x,map.secret.return.y,null);
-  }else if(!p.zone&&p.grounded&&p.x>map.overworldEnd.x-20&&p.x<map.overworldEnd.x+90){teleport(p,b.x+90+(p.spawnSlot??0)*48,568,'boss');}
+   teleport(p,map.secret.return.x,map.secret.return.y,null);p.returnPoint=null;
+  }else if(action?.type==='retreat'){teleport(p,map.overworldEnd.x-75,map.overworldEnd.y-32,null);
+  }else if(action?.type==='castle'){p.returnPoint=null;teleport(p,b.x+90+(p.spawnSlot??0)*48,568,'boss');}
  }
  const team=active.filter(p=>p.zone==='boss');
  if(!s.started&&team.length&&team.length===active.length)s.started=true;

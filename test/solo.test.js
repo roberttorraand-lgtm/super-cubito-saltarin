@@ -26,7 +26,7 @@ test('one solo player advances, finishes campaign, retries and restores three li
 });
 test('2016 discoveries are collected once without spending or restoring lives',()=>{
  const m=soloLevels[0],e=m.easterEggs[0],p=newPlayer('a','Solo','#fff',m),w=createWorld();p.x=e.x;p.y=e.y-16;p.lives=2;
- tickGroup([p],m,w);tickGroup([p],m,w);assert.deepEqual(w.eggs,[e.id]);assert.equal(p.lives,2);assert.equal(w.lastEgg.caption,e.caption);
+ p.input.interact=true;tickGroup([p],m,w);tickGroup([p],m,w);assert.deepEqual(w.eggs,[e.id]);assert.equal(p.lives,2);assert.equal(w.lastEgg.caption,e.caption);
 });
 test('solo blue mirrors latch sequentially and solo red seal needs no teammate',()=>{
  const m=soloLevels[0],p={...newPlayer('a','','',m),zone:'boss',x:m.boss.x+164,y:568,grounded:true},w=createWorld();

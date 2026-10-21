@@ -2,11 +2,11 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {levels,newPlayer,createWorld,tickGroup,respawn,tick} from '../game.js';
 import {updateEncounters,bossView} from '../encounters.js';
-const player=(m,id,x)=>({...newPlayer(id,id,'#fff',m),x,y:568,grounded:true,zone:'boss'});
+const player=(m,id,x)=>({...newPlayer(id,id,'#fff',m),x,y:568,grounded:true,interactPressed:true,zone:'boss'});
 function update(ps,m,w){updateEncounters(ps,new Map(ps.map(p=>[p.id,{...p}])),m,w,respawn);}
 for(const m of levels){
  test(`${m.name}: secret entrance, reward and return preserve lives`,()=>{
-  const p=player(m,'a',m.secret.door.x);p.zone=null;p.y=m.secret.door.y-32;const w=createWorld();update([p],m,w);
+  const p=player(m,'a',m.secret.door.x);p.zone=null;p.y=m.secret.door.y-32;const w=createWorld();w.eggs=[m.easterEggs[0].id];update([p],m,w);
   assert.equal(p.zone,'secret');assert.equal(p.lives,3);
   p.x=m.secret.x+815;p.portalCooldown=0;update([p],m,w);
   assert.equal(p.zone,null);assert.equal(p.lives,3);assert.equal(p.invulnerable,180);assert.deepEqual(w.secrets,['a']);
@@ -47,8 +47,8 @@ test('each shield has its own cooperative mechanism',()=>{
 });
 test('client prediction and authority agree across portal transitions',()=>{
  const m=levels[0],a=player(m,'a',m.secret.door.x);a.zone=null;a.y=m.secret.door.y-32;
- const b=structuredClone(a),w=createWorld(),v=createWorld();
- tickGroup([a],m,w);tickGroup([b],m,v,{mechanisms:false});assert.deepEqual(a,b);assert.deepEqual(w.boss,v.boss);assert.deepEqual(w.secrets,v.secrets);
+ a.input.interact=true;const b=structuredClone(a),w=createWorld(),v=createWorld();w.eggs=v.eggs=[m.easterEggs[0].id];
+ tickGroup([a],m,w);tickGroup([b],m,v,{mechanisms:false});assert.equal(a.zone,'secret');assert.deepEqual(a,b);assert.deepEqual(w.boss,v.boss);assert.deepEqual(w.secrets,v.secrets);
 });
 test('a normal jump reaches and damages every exposed boss without position corrections',()=>{
  for(const m of levels){
