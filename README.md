@@ -65,9 +65,15 @@ Entra al edificio del final con **E**. La pelea comienza cuando llegan todos los
 
 Los ataques avisan antes de causar daño. Cuando cae el escudo, salta sobre el retrato: tres golpes abren la meta. La vida del jefe se comparte entre los jugadores. Morir dentro de una arena consume una vida y devuelve a su entrada. Visitar una casa después de vencer al jefe nunca cuenta como terminar un mundo.
 
-## Arte y fluidez
+## Arte, animación y fluidez (0.11)
 
 Los fondos pintados de los cuatro mundos, las criaturas con transparencia, los iconos de equipo y los vecinos ilustrados son recursos locales originales generados para el juego. Los retratos de los jefes se adaptaron de las referencias del usuario. No se requieren servidores de imágenes ni fuentes externas.
+
+Los fondos usan un encuadre panorámico continuo, sin repetir la imagen en espejo al avanzar. Los cuatro enemigos tienen diseños propios y dieciséis poses pintadas: dos pasos de marcha, anticipación y ataque para cada uno. La capa de animación usa los estados de combate y el reloj compartido para combinar poses, compresión del cuerpo, inclinación, retroceso, vuelo, derrapes y recuperación. Los pies se anclan a la misma posición entre fotogramas; las sombras responden a la altura. Hay destellos al recibir daño y partículas al preparar ataques y ser derrotados. Estas animaciones no modifican las colisiones.
+
+Cada mundo incorpora tres grandes elementos ambientales: santuarios de raíces y faroles, maquinaria astronómica de cobre, órganos de cristal o astrolabios lunares. Las raíces, capas de roca, facetas de hielo y grabados del terreno refuerzan la identidad de cada mundo. Las cascadas, cadenas, anillos y luces tienen movimiento propio y quedan detrás de las superficies jugables. Los secretos conservan sus pistas discretas y no se señalan con los nuevos elementos decorativos.
+
+La preferencia de movimiento reducido conserva las poses de ataque que transmiten información y desactiva balanceos, sacudidas, retroceso visual y destellos. Los recursos originales de criaturas se mantienen como alternativa si no se puede cargar la nueva lámina de animaciones.
 
 El renderizador usa `requestAnimationFrame`, paralaje, texturas reutilizadas, descarte de elementos fuera de cámara, un máximo de 120 partículas y resolución limitada a DPR 2. Los retratos de jefes y los habitantes se cargan al necesitarlos. Las imágenes usan validación HTTP con ETag. El movimiento reducido desactiva efectos decorativos. Las animaciones visuales nunca cambian las colisiones.
 

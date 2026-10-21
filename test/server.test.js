@@ -15,10 +15,10 @@ test('real WebSocket rooms: synchronization, authoritative limits, isolation, ca
   const base=`http://127.0.0.1:${port}`;
   assert.equal((await fetch(`${base}/health`)).status,200);
   assert.match(await (await fetch(base)).text(),/Super Cubito/);
-  for(const file of ['/game.js','/levels.js','/netcode.js','/renderer.js','/encounters.js','/exploration.js','/solo.js','/art.js','/combat.js'])assert.equal((await fetch(base+file)).status,200);
+  for(const file of ['/game.js','/levels.js','/netcode.js','/renderer.js','/encounters.js','/exploration.js','/solo.js','/art.js','/combat.js','/animation.js','/detail.js'])assert.equal((await fetch(base+file)).status,200);
   assert.equal((await fetch(`${base}/missing`)).status,404);
   const png=await fetch(base+'/assets/meme-atlas.png');assert.equal(png.status,200);
-  for(const asset of ['boss-atlas','creatures','landscapes','residents','powerups'])assert.equal((await fetch(base+'/assets/'+asset+'.png')).status,200);
+  for(const asset of ['boss-atlas','creatures','landscapes','residents','powerups','enemy-motion','world-relics'])assert.equal((await fetch(base+'/assets/'+asset+'.png')).status,200);
   assert.equal((await fetch(base+'/assets/creatures.png',{headers:{'If-None-Match':(await fetch(base+'/assets/creatures.png')).headers.get('etag')}})).status,304);
   const signature=new Uint8Array(await png.arrayBuffer()).slice(0,8);assert.deepEqual([...signature],[137,80,78,71,13,10,26,10]);
   async function client(room=''){

@@ -1,12 +1,13 @@
+import {DetailArt} from '/detail.js';
 // Presentation only. Collision shapes remain in the shared simulation.
 const palettes=[['#45634e','#283b37','#85b77d'],['#a87660','#54465a','#d8a37a'],['#7196ad','#354b69','#dbf2f7'],['#676080','#302d4c','#bcaae6']];
 export class WorldArt{
- constructor(){this.scenes=new Image();this.scenes.src='/assets/landscapes.png';this.creatures=new Image();this.creatures.src='/assets/creatures.png';this.powerups=new Image();this.powerups.src='/assets/powerups.png';this.residents=new Image();this.textures=new Map();this.patterns=new Map();}
+ constructor(){this.detail=new DetailArt();this.scenes=new Image();this.scenes.src='/assets/landscapes.png';this.creatures=new Image();this.powerups=new Image();this.powerups.src='/assets/powerups.png';this.residents=new Image();this.textures=new Map();this.patterns=new Map();}
  background(c,m,camera,view,time,reduced){
   if(this.scenes.complete&&this.scenes.naturalWidth){
-   const sw=this.scenes.width/2,sh=this.scenes.height/2,w=720*sw/sh;
-   const offset=-(camera*.12%(w*2));
-   for(let x=offset-w*2;x<view;x+=w){c.save();const index=Math.round((x-offset)/w);c.translate(x,0);if(Math.abs(index)%2){c.translate(w,0);c.scale(-1,1);}c.drawImage(this.scenes,m.id%2*sw,Math.floor(m.id/2)*sh,sw,sh,0,0,w,720);c.restore();}
+   const sw=this.scenes.width/2,sh=this.scenes.height/2,w=Math.max(view+180,720*sw/sh),h=w*sh/sw;
+   const progress=reduced?.5:Math.max(0,Math.min(1,camera/Math.max(1,(m.overworldWidth??m.width)-view)));
+   c.drawImage(this.scenes,m.id%2*sw,Math.floor(m.id/2)*sh,sw,sh,-progress*(w-view),-(h-720)*.25,w,h);
   }else{const g=c.createLinearGradient(0,0,0,720);g.addColorStop(0,m.theme.sky[0]);g.addColorStop(1,m.theme.sky[1]);c.fillStyle=g;c.fillRect(0,0,view,720);}
   const haze=c.createLinearGradient(0,320,0,720);haze.addColorStop(0,'#172c3600');haze.addColorStop(1,m.id===3?'#1b153b77':'#24423555');c.fillStyle=haze;c.fillRect(0,0,view,720);
   if(!reduced){for(let i=0;i<22;i++){const x=((i*137.13-camera*.3+Math.sin(time+i)*10)%(view+30)+view+30)%(view+30),y=130+(i*71.7+time*(m.id===2?9:-3))%530;c.globalAlpha=.18+(.5+Math.sin(time+i)*.5)*.3;c.fillStyle=m.id===2?'#e8faff':m.id===0?'#fff1a7':'#f9daed';c.beginPath();c.arc(x,y,m.id===2?1.7:1.2,0,Math.PI*2);c.fill();}c.globalAlpha=1;}
@@ -42,7 +43,9 @@ export class WorldArt{
    }
   }
  }
- creature(c,e,time,reduced){
+ creature(c,e,time,reduced,world={},map=null){
+  if(this.detail.actor(c,e,world.enemyStates?.[e.id]??{},world,reduced,map))return;
+  if(this.detail.actors.complete&&!this.detail.actors.naturalWidth&&!this.creatures.src)this.creatures.src='/assets/creatures.png';
   const image=this.creatures,index={capy:0,toaster:1,banana:2,duck:3}[e.kind]??0;
   const w=e.w+16,h=e.h+18,x=e.x-8,y=e.y-16;
   c.fillStyle='#10232933';c.beginPath();c.ellipse(e.x+e.w/2,e.y+e.h+2,e.w*.45,4,0,0,Math.PI*2);c.fill();

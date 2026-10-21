@@ -8,7 +8,7 @@ export class Renderer {
     this.art=new WorldArt();
     this.bossAtlas=new Image();
     this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});this.camera=0;
-    this.visuals=new Map();this.particles=[];this.layers=[];this.reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.enemyVisuals=new Map();this.seenDefeats=new Set();this.visuals=new Map();this.particles=[];this.layers=[];this.reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.w=1;this.h=1;
     new ResizeObserver(()=>this.resize()).observe(canvas);this.resize();
   }
@@ -20,7 +20,7 @@ export class Renderer {
     this.skyCache=null;
   }
   setLevel(level){
-    this.level=level;this.skyCache=null;this.camera=0;this.visuals.clear();this.particles=[];
+    this.level=level;this.skyCache=null;this.camera=0;this.visuals.clear();this.enemyVisuals.clear();this.seenDefeats.clear();this.particles=[];
   }
   burst(x,y,color,count=10){
     if(this.reduced)return;
@@ -40,7 +40,9 @@ export class Renderer {
     ctx.setTransform(this.dpr*scale,0,0,this.dpr*scale,0,0);
     this.art.background(ctx,l,this.camera,view,time,this.reduced);
     ctx.save();ctx.translate(-this.camera,0);
+    if(!me?.zone)this.art.detail.scenery(ctx,l,left,right,time,this.reduced);
     this.art.terrain(ctx,l,left,right);
+    this.art.detail.surface(ctx,l,left,right,time,this.reduced);
     for(const [x,y,w,h] of l.spikes){
       if(x+w<left||x>right)continue;
       for(let dx=0;dx<w;dx+=16){ctx.fillStyle='#d76e78';ctx.beginPath();ctx.moveTo(x+dx,y+h);ctx.lineTo(x+dx+8,y);ctx.lineTo(x+dx+16,y+h);ctx.fill();ctx.fillStyle='#ffc3b0';ctx.beginPath();ctx.moveTo(x+dx+8,y);ctx.lineTo(x+dx+8,y+h);ctx.lineTo(x+dx,y+h);ctx.fill();}
@@ -186,9 +188,14 @@ export class Renderer {
       ctx.strokeStyle='#6c5b9b';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(spring.x+8,spring.y);ctx.lineTo(spring.x+30,spring.y-5);ctx.lineTo(spring.x+8,spring.y-10);ctx.lineTo(spring.x+30,spring.y-15);ctx.stroke();
       ctx.fillStyle='#ff9dde';ctx.fillRect(spring.x,spring.y-19,spring.w,5);ctx.fillStyle='#345368';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText('BOING.EXE',spring.x+spring.w/2,spring.y-28);
     }
+    for(const id of world.defeatedEnemies??[]){if(this.seenDefeats.has(id))continue;this.seenDefeats.add(id);const old=this.enemyVisuals.get(id);if(old&&old.x>left&&old.x<right)this.burst(old.x+16,old.y+16,'#ffe6ab',14);this.enemyVisuals.delete(id);}
     for(const enemy of enemyPositions(map,world)){
       if(enemy.x+enemy.w<left||enemy.x>right)continue;
-      this.art.creature(ctx,enemy,time,this.reduced);
+      const old=this.enemyVisuals.get(enemy.id);
+      if(old&&enemy.hp<old.hp)this.burst(enemy.x+enemy.w/2,enemy.y+enemy.h/2,'#ffe1a2',5);
+      if(old&&enemy.phase==='windup'&&old.phase!=='windup')this.burst(enemy.x+enemy.w/2,enemy.y,'#ffd78c',3);
+      this.enemyVisuals.set(enemy.id,{x:enemy.x,y:enemy.y,hp:enemy.hp,phase:enemy.phase});
+      this.art.creature(ctx,enemy,time,this.reduced,world,map);
       this.art.enemyIntent(ctx,enemy,world.enemyStates?.[enemy.id]);
     }
   }
