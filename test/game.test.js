@@ -33,7 +33,8 @@ test('checkpoint respawn is safe and preserves the latest checkpoint',()=>{
   assert.equal(p.x,cp.x);assert.equal(p.y,cp.y-32);assert.equal(p.deaths,1);assert.equal(p.lives,2);
  });
 });
-for(const map of levels)test(`two players can solve every mechanism and finish: ${map.name}`,()=>{
+for(const original of levels)test(`two players can solve every mechanism and reach the castle: ${original.name}`,()=>{
+  const map={...original,boss:null,goal:original.overworldEnd};
   const players=[newPlayer('a','Climber','#fff',map),newPlayer('b','Base','#fff',map)];
   const world=createWorld(),control=teamController();
   for(let i=0;i<15000&&!players.every(p=>p.finished);i++){

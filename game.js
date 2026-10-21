@@ -1,3 +1,4 @@
+import { updateEncounters } from './encounters.js';
 // The same deterministic 60 Hz simulation runs on the server and in the browser.
 export const STEP_MS = 1000 / 60;
 export const SIZE = 32;
@@ -14,6 +15,8 @@ export function respawn(p,map){
   p.deaths++;p.lives=Math.max(0,(p.lives??3)-1);
   p.vx=p.vy=0;p.supportId=null;p.grounded=false;p.coyote=0;p.jumpBuffer=0;
   if(p.lives===0){p.eliminated=true;p.y=Math.min(map.height-40,p.y);return;}
+  if(p.zone==='boss'&&map.boss){p.x=map.boss.x+90+(p.spawnSlot??0)*48;p.y=568;p.invulnerable=120;return;}
+  p.zone=null;
   const point=map.checkpoints[p.checkpoint];
   p.x=point?.x??(map.spawn.x+(p.spawnSlot??0)*44);p.y=point?point.y-SIZE:map.spawn.y;
   p.invulnerable=90;
@@ -57,7 +60,7 @@ export function tick(p,map=level,world=null){
   map.checkpoints.forEach((point,i)=>{
     if(i>p.checkpoint&&p.x>point.x-25&&p.x<point.x+70&&Math.abs(p.y+SIZE-point.y)<12)p.checkpoint=i;
   });
-  if(p.grounded&&p.x>map.goal.x-20&&Math.abs(p.y+SIZE-map.goal.y)<45){p.finished=true;p.vx=p.vy=0;}
+  if((!map.boss||world?.bossDefeated)&&p.grounded&&p.x>map.goal.x-20&&Math.abs(p.y+SIZE-map.goal.y)<45){p.finished=true;p.vx=p.vy=0;}
 }
 
 export function createWorld(){return {frame:0,activated:[],charge:{},pressed:[],crumble:{},defeatedEnemies:[]};}
@@ -130,6 +133,7 @@ export function tickGroup(players,map,world,{mechanisms=true}={}){
   // Collision displacement can move a cube onto a hazard too.
   for(const p of players)if(!p.finished&&!p.eliminated&&!p.invulnerable&&hitsHazard(p,map,world))respawn(p,map);
   updateEnemies(players,previous,map,world);
+  updateEncounters(players,previous,map,world,respawn);
   if(mechanisms){updateMechanisms(players,map,world);updateCrumble(players,map,world);}
 }
 

@@ -57,7 +57,7 @@ test('enemies move deterministically and a downward stomp defeats one for the wh
  const map={...flat,enemies:[enemy]},w=createWorld(),a={...p(),x:304,y:535,vy:6,grounded:false};
  const before=new Map([[a.id,{...a,y:525}]]);updateEnemies([a],before,map,w);
  assert.equal(a.lives,3);assert.ok(a.vy<0);assert.deepEqual(w.defeatedEnemies,['duck']);assert.equal(enemyPositions(map,w).length,0);
- assert.equal(enemyPositions(levels[0],createWorld()).length,6);
+ assert.equal(enemyPositions(levels[0],createWorld()).length,12);
 });
 test('side contact causes damage without killing the enemy and prediction replays the same collision',()=>{
  const map={...flat,enemies:[enemy]},w=createWorld(),a={...p(),x:302};

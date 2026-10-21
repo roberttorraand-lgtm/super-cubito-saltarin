@@ -6,10 +6,10 @@ import { levels, newPlayer, tickGroup, STEP_MS } from './game.js';
 import { takeInput, queueInput } from './transport.js';
 import { createRoom, checkCompletion, voteNext, voteRestart } from './rooms.js';
 
-const files=new Map([['/',['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/game.js',['game.js','text/javascript']],['/levels.js',['levels.js','text/javascript']],['/netcode.js',['public/netcode.js','text/javascript']],['/renderer.js',['public/renderer.js','text/javascript']],['/assets/meme-atlas.png',['public/assets/meme-atlas.png','image/png']]]);
+const files=new Map([['/encounters.js',['encounters.js','text/javascript']],['/assets/boss-atlas.png',['public/assets/boss-atlas.png','image/png']],['/',['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/game.js',['game.js','text/javascript']],['/levels.js',['levels.js','text/javascript']],['/netcode.js',['public/netcode.js','text/javascript']],['/renderer.js',['public/renderer.js','text/javascript']],['/assets/meme-atlas.png',['public/assets/meme-atlas.png','image/png']]]);
 const server=http.createServer(async(req,res)=>{
   let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{res.writeHead(400);return res.end();}
-  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.6.0"}');}
+  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.7.0"}');}
   const file=files.get(path);
   if(!file){res.writeHead(404);return res.end('No encontrado');}
   try{

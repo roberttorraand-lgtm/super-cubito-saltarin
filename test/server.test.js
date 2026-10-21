@@ -15,9 +15,10 @@ test('real WebSocket rooms: synchronization, authoritative limits, isolation, ca
   const base=`http://127.0.0.1:${port}`;
   assert.equal((await fetch(`${base}/health`)).status,200);
   assert.match(await (await fetch(base)).text(),/Super Cubito/);
-  for(const file of ['/game.js','/levels.js','/netcode.js','/renderer.js'])assert.equal((await fetch(base+file)).status,200);
+  for(const file of ['/game.js','/levels.js','/netcode.js','/renderer.js','/encounters.js'])assert.equal((await fetch(base+file)).status,200);
   assert.equal((await fetch(`${base}/missing`)).status,404);
   const png=await fetch(base+'/assets/meme-atlas.png');assert.equal(png.status,200);
+  assert.equal((await fetch(base+'/assets/boss-atlas.png')).status,200);
   const signature=new Uint8Array(await png.arrayBuffer()).slice(0,8);assert.deepEqual([...signature],[137,80,78,71,13,10,26,10]);
   async function client(room=''){
     const ws=new WebSocket(`ws://127.0.0.1:${port}`);sockets.push(ws);ws.inbox=[];

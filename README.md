@@ -1,6 +1,6 @@
 # Super Cubito Saltarín
 
-Plataformas cooperativo online para 2–4 jugadores, ahora con **3 vidas por mundo**, 24 enemigos absurdos, memes PNG, muelles y cintas transportadoras. Cuatro recorridos diseñados individualmente en `levels.js`, cada uno con geometría, ambientación y obstáculos propios:
+Plataformas cooperativo online para 2–4 jugadores, ahora con **3 vidas por mundo**, 48 enemigos absurdos, memes PNG, muelles y cintas transportadoras. Cuatro recorridos diseñados individualmente en `levels.js`, cada uno con geometría, ambientación y obstáculos propios:
 
 | Mundo | Retos propios |
 | --- | --- |
@@ -71,3 +71,18 @@ Las salas viven en memoria: un reinicio o despliegue interrumpe las partidas. No
 ## Imágenes de memes
 
 `public/assets/meme-atlas.png` contiene cuatro recortes originales generados para este juego, con fondo transparente. El renderizador dibuja cada cuadrante directamente: no necesita enlaces externos ni descargar imágenes durante la partida. Las posiciones y animaciones de los enemigos se calculan a partir del reloj compartido del mundo; las derrotas las confirma el servidor. Los carteles son decorativos y los enemigos tienen colisión.
+
+### Castillos, secretos y jefes (0.7)
+
+Cada mundo tiene una puerta secreta en su cuarta isla: entra caminando, atraviesa la sala con sus tres guardianes y sal por la puerta del fondo. La primera visita de cada jugador concede tres segundos de escudo. Entrar y salir no restaura vidas.
+
+Al final del recorrido hay un castillo o mansión con interior. La pelea empieza cuando llegan todos los jugadores que siguen vivos. Los cuatro retratos se han adaptado de las imágenes aportadas por el usuario para formar un atlas PNG local.
+
+- That's la Peace: mantened pisados los dos espejos para desactivar su escudo azul.
+- Soldador Bai de Feis: saltad hasta el punto más alto sobre las dos válvulas para enfriar la máquina; cuidado con el suelo caliente alterno.
+- Gigachad 67: saltad juntos durante la señal «¡YA!» para romper el aura; su onda se evita saltando.
+- Señor del Cubo Carmesí: formad una torre de cubitos sobre el sello para romper la armadura; las columnas de fuego se anuncian antes de caer.
+
+Con el escudo desactivado, saltad sobre el retrato. Tres golpes abren la meta. La vida del jefe y los enemigos derrotados se comparten entre todos los jugadores; el servidor valida el combate. Morir dentro devuelve a la entrada de la arena y consume una de las tres vidas del mundo. Si falta un compañero para resolver una mecánica, podéis votar reiniciar el mismo mundo.
+
+Hay 48 enemigos en total, incluidas las patrullas adicionales y los guardianes secretos. Los ataques usan el reloj de simulación compartido, con avisos antes de causar daño.

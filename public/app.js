@@ -76,7 +76,7 @@ function updateState(m){
   const objective=(level.objectives??[]).find(o=>!world.activated.includes(o.group));
   const pads=objective?level.plates.filter(p=>p.group===objective.group):[];
   const nearby=objective&&pads.length&&Math.min(...pads.map(p=>p.x))-(local?.x??0)<750;
-  const hint=nearby?objective.hint:null;
+  const hint=local?.zone==='boss'?level.boss.hint:local?.zone==='secret'?'SALA SECRETA · Llega a la puerta del fondo para obtener un escudo.':nearby?objective.hint:null;
   const movementTip=level.id===2?'Hielo: frena con tiempo y no te detengas sobre los puentes frágiles.':level.id===3?'Gravedad lunar: mantén el salto y calcula los pulsos de energía.':level.subtitle;
   const instruction=hint??`${levelIndex+1} / ${levels.length} · ${movementTip}`;
   if($('#level-info').textContent!==instruction)$('#level-info').textContent=instruction;

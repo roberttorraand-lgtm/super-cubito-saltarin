@@ -1,7 +1,9 @@
+import { bossView } from '/encounters.js';
 import { sawPositions, crumbleActive, enemyPositions } from '/game.js';
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export class Renderer {
   constructor(canvas){
+    this.bossAtlas=new Image();this.bossAtlas.src='/assets/boss-atlas.png';
     this.atlas=new Image();this.atlasReady=false;this.atlas.onload=()=>{this.atlasReady=true;};this.atlas.src='/assets/meme-atlas.png';
     this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:false});this.camera=0;
     this.visuals=new Map();this.particles=[];this.layers=[];this.reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -104,6 +106,7 @@ export class Renderer {
     }
     this.mechanisms(l,world,time,left,right);
     this.chaos(l,world,time,left,right);
+    this.encounters(l,world,left,right);
     l.checkpoints.forEach((point,i)=>{if(point.x>left&&point.x<right)this.flag(point.x,point.y,i<=(me?.checkpoint??-1)?'#b4f669':'#ffffffaa',time,'GUARDAR PROGRESO');});
     if(l.goal.x>left&&l.goal.x<right)this.flag(l.goal.x,l.goal.y,t.accent,time,'META DEL EQUIPO',true);
     const alive=new Set(players.map(p=>p.id));for(const key of this.visuals.keys())if(!alive.has(key))this.visuals.delete(key);
@@ -258,6 +261,44 @@ export class Renderer {
       this.sprite(enemy.kind,enemy.x-12,enemy.y-20+wobble,enemy.w+24,enemy.h+24,enemy.facing<0);
       ctx.fillStyle='#ffffffdd';ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText(names[enemy.kind],enemy.x+enemy.w/2,enemy.y-23);
     }
+  }
+  encounters(map,world,left,right){
+    if(!map.boss)return;
+    const c=this.ctx,b=map.boss,s=world.boss;
+    const text=(str,x,y,size=14)=>{c.font=`bold ${size}px sans-serif`;c.textAlign='center';c.fillStyle='#fff6d7';c.fillText(str,x,y);};
+    const door=(x,y,title,color)=>{if(x+180<left||x-180>right)return;c.fillStyle='#29243c';c.fillRect(x-65,y-165,130,165);c.strokeStyle=color;c.lineWidth=5;c.strokeRect(x-65,y-165,130,165);c.fillStyle=color;c.fillRect(x-5,y-70,10,10);text(title,x,y-185,12);text('ENTRA CAMINANDO',x,y-28,10);};
+    const castle=map.castle;
+    if(castle.x+340>left&&castle.x-160<right){
+      c.fillStyle=map.id%2?'#47324c':'#525873';c.fillRect(castle.x-100,castle.y-265,340,265);
+      for(const x of [castle.x-125,castle.x+195]){c.fillRect(x,castle.y-330,70,330);c.fillStyle='#9e70a8';c.beginPath();c.moveTo(x-12,castle.y-330);c.lineTo(x+35,castle.y-390);c.lineTo(x+82,castle.y-330);c.fill();c.fillStyle='#525873';}
+      for(let i=0;i<4;i++){c.fillStyle='#ffda86';c.fillRect(castle.x-65+i*72,castle.y-230,22,35);}
+    }
+    door(map.overworldEnd.x,castle.y,castle.name,'#ffd382');
+    door(map.secret.door.x,map.secret.door.y,'¿UNA PUERTA SOSPECHOSA?','#b88cff');
+    if(map.secret.x+900>left&&map.secret.x<right){
+      c.fillStyle='#241e3bcc';c.fillRect(map.secret.x,60,900,530);text(map.secret.name,map.secret.x+450,130,26);
+      text('Tres guardianes, una salida y un escudo secreto',map.secret.x+450,180);
+      door(map.secret.x+825,600,'VOLVER · ESCUDO 3 SEGUNDOS','#a2f4cf');
+    }
+    if(b.x+b.w<left||b.x>right)return;
+    c.fillStyle='#19162ce8';c.fillRect(b.x,40,b.w,550);
+    for(let x=b.x+20;x<b.x+b.w;x+=180){c.fillStyle='#3d3252';c.fillRect(x,120,26,480);c.fillStyle='#ffd584';c.fillRect(x+8,190,10,30);}
+    text(b.name,b.x+550,100,28);text(b.hint,b.x+550,140,13);
+    if(!s?.started)text('ESPERANDO AL EQUIPO EN EL INTERIOR',b.x+550,200);
+    const hp=s?.hp??3;c.fillStyle='#4f344f';c.fillRect(b.x+350,165,400,15);c.fillStyle='#f38b9e';c.fillRect(b.x+350,165,400*hp/3,15);
+    const view=bossView(map,world);
+    if(view){
+      for(const r of view.warnings){c.fillStyle='#ffd35d55';c.fillRect(...r);c.strokeStyle='#ffdb70';c.strokeRect(...r);}
+      for(const r of view.hazards){c.fillStyle=['#75cfff','#84ff74','#ffe87b','#ff6262'][map.id];c.fillRect(...r);}
+      const [x,y,w,h]=view.rect;
+      if(this.bossAtlas.complete&&this.bossAtlas.naturalWidth){const aw=this.bossAtlas.width/2,ah=this.bossAtlas.height/2;c.drawImage(this.bossAtlas,map.id%2*aw,Math.floor(map.id/2)*ah,aw,ah,x,y,w,h);}
+      c.strokeStyle=view.open?'#b8ff8a':'#ff8eaf';c.lineWidth=4;c.strokeRect(x-3,y-3,w+6,h+6);
+      text(view.open?'¡SALTA ENCIMA!':'ESCUDO ACTIVO',x+w/2,y-22,12);
+      if(map.id===2)text(view.beat?'¡YA! · SALTAD JUNTOS':'ESPERAD LA SEÑAL',b.x+550,240,24);
+    }
+    if(map.id===0||map.id===1)for(const x of (map.id===0?[180,900]:[280,800])){c.fillStyle=map.id===0?'#8ee3ff':'#8dff9d';c.fillRect(b.x+x-45,592,90,8);text(map.id===0?'ESPEJO':'SALTA AQUÍ',b.x+x,570,11);}
+    if(map.id===3){c.strokeStyle='#ff9a78';c.strokeRect(b.x+230,500,100,35);text('TORRE DE CUBITOS',b.x+280,475,12);}
+    if(s?.hp===0)text('JEFE DERROTADO · SALIDA ABIERTA →',b.x+720,300,23);
   }
   flag(x,y,color,time,label,goal=false){
     const ctx=this.ctx;if(this.reduced)time=0;
