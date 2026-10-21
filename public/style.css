@@ -3,3 +3,5 @@
 
 .level-info{font-size:11px;background:#263f5366;line-height:1.6;padding:8px 16px}@media(max-width:700px){.level-info{font-size:10px;letter-spacing:.2px;line-height:1.5;padding:8px 15px}}
 #life-hud{position:absolute;z-index:2;left:18px;top:14px;display:flex;flex-direction:column;gap:2px;padding:8px 12px;border:1px solid #ffffff44;border-radius:10px;background:#20344a99;color:#fff;pointer-events:none}#hearts{font-size:23px;letter-spacing:3px;color:#ff8ba5;line-height:1}#life-label{font-size:8px;letter-spacing:1px}#restart-panel{padding:13px 18px;background:#ffe4b9;color:#674c3f;display:flex;align-items:center;justify-content:space-between;gap:15px;font-size:11px}#restart{background:#725578;white-space:nowrap}#victory .lobby-card{max-width:90%}@media(max-width:700px){#life-hud{top:116px;left:12px;padding:6px 8px}#hearts{font-size:18px}#life-label{font-size:7px}#restart-panel{flex-direction:column;align-items:stretch;font-size:10px}#restart{padding:10px}}
+
+#solo{margin-top:10px;background:#dac4f4;color:#302743;width:100%} .level-info{max-width:calc(100% - 28px)}

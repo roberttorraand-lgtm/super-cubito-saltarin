@@ -4,12 +4,12 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { levels, newPlayer, tickGroup, STEP_MS } from './game.js';
 import { takeInput, queueInput } from './transport.js';
-import { createRoom, checkCompletion, voteNext, voteRestart } from './rooms.js';
+import { createRoom, checkCompletion, voteNext, voteRestart, roomLevels } from './rooms.js';
 
-const files=new Map([['/encounters.js',['encounters.js','text/javascript']],['/assets/boss-atlas.png',['public/assets/boss-atlas.png','image/png']],['/',['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/game.js',['game.js','text/javascript']],['/levels.js',['levels.js','text/javascript']],['/netcode.js',['public/netcode.js','text/javascript']],['/renderer.js',['public/renderer.js','text/javascript']],['/assets/meme-atlas.png',['public/assets/meme-atlas.png','image/png']]]);
+const files=new Map([['/solo.js',['solo.js','text/javascript']],['/encounters.js',['encounters.js','text/javascript']],['/assets/boss-atlas.png',['public/assets/boss-atlas.png','image/png']],['/',['public/index.html','text/html']],['/app.js',['public/app.js','text/javascript']],['/style.css',['public/style.css','text/css']],['/game.js',['game.js','text/javascript']],['/levels.js',['levels.js','text/javascript']],['/netcode.js',['public/netcode.js','text/javascript']],['/renderer.js',['public/renderer.js','text/javascript']],['/assets/meme-atlas.png',['public/assets/meme-atlas.png','image/png']]]);
 const server=http.createServer(async(req,res)=>{
   let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{res.writeHead(400);return res.end();}
-  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.7.0"}');}
+  if(path==='/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.8.0"}');}
   const file=files.get(path);
   if(!file){res.writeHead(404);return res.end('No encontrado');}
   try{
@@ -23,7 +23,7 @@ const colors=['#b4f669','#92bbff','#ffb591','#d3a6ff'];
 // Control messages (especially level changes) must arrive even when old states are skipped.
 const send=(ws,data)=>{if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(data));};
 function sendLevel(ws,type='level'){
-  send(ws,{type,id:ws.player.id,room:ws.room.code,level:levels[ws.room.levelIndex],levelIndex:ws.room.levelIndex,totalLevels:levels.length,revision:ws.room.revision,world:ws.room.world,player:ws.player});
+  send(ws,{type,id:ws.player.id,room:ws.room.code,mode:ws.room.mode,level:roomLevels(ws.room)[ws.room.levelIndex],levelIndex:ws.room.levelIndex,totalLevels:levels.length,revision:ws.room.revision,world:ws.room.world,player:ws.player});
 }
 wss.on('connection',(ws,req)=>{
   req.socket.setNoDelay(true);
@@ -58,16 +58,17 @@ wss.on('connection',(ws,req)=>{
     if(requested){
       room=rooms.get(requested);
       if(!room)return send(ws,{type:'error',message:'Esa sala no existe. Revisa el código.'});
+      if(room.mode==='solo')return send(ws,{type:'error',message:'Esta partida es individual. Crea tu propia aventura en solitario.'});
       if(room.clients.size>=4)return send(ws,{type:'error',message:'Sala completa: máximo 4 jugadores.'});
     }else{
       if(rooms.size>=100)return send(ws,{type:'error',message:'Servidor ocupado. Inténtalo más tarde.'});
       let code;do{code=randomBytes(3).toString('hex').toUpperCase();}while(rooms.has(code));
-      room=createRoom(code);rooms.set(code,room);
+      room=createRoom(code,m.mode==='solo'?'solo':'coop');rooms.set(code,room);
     }
     const used=new Set([...room.clients].map(c=>c.player.color));
     const name=(typeof m.name==='string'?m.name:'').replace(/[\x00-\x1f]/g,'').trim().slice(0,18)||'Cubito';
     const color=colors.find(c=>!used.has(c));
-    ws.player=newPlayer(randomUUID(),name,color,levels[room.levelIndex],colors.indexOf(color));ws.room=room;
+    ws.player=newPlayer(randomUUID(),name,color,roomLevels(room)[room.levelIndex],colors.indexOf(color));ws.room=room;
     // A late joiner can play the current level, including after the others reached its flag.
     if(room.phase!=='playing'){room.phase='playing';room.ready.clear();}
     room.clients.add(ws);sendLevel(ws,'welcome');
@@ -95,7 +96,7 @@ const loop=setInterval(()=>{
           if(input){ws.player.input=input;ws.lastSeq=input.seq;}
           else if(now-ws.lastInput>250)ws.player.input={left:false,right:false,jump:false};
         }
-        tickGroup([...room.clients].map(ws=>ws.player),levels[room.levelIndex],room.world);
+        tickGroup([...room.clients].map(ws=>ws.player),roomLevels(room)[room.levelIndex],room.world);
       }
       checkCompletion(room);
       if(frame%2!==0)continue;

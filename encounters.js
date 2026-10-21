@@ -50,15 +50,18 @@ export function updateEncounters(players,previous,map,world,respawn){
  const t=s.tick%240,center=b.x+550;
  const pad=(p,x)=>p.grounded&&Math.abs(p.x+16-x)<55&&Math.abs(p.y+32-600)<5;
  let trigger=false;
- if(map.id===0)trigger=team.some(p=>pad(p,b.x+180))&&team.some(p=>pad(p,b.x+900));
+ if(map.id===0){
+  if(map.mode==='solo'){s.mirrors??=[];for(const [i,x] of [b.x+180,b.x+900].entries())if(team.some(p=>pad(p,x))&&!s.mirrors.includes(i))s.mirrors.push(i);trigger=s.mirrors.length===2;}
+  else trigger=team.some(p=>pad(p,b.x+180))&&team.some(p=>pad(p,b.x+900));
+ }
  if(map.id===1){s.valves??=[];for(const [i,x] of [b.x+280,b.x+800].entries())if(team.some(p=>{const old=previous.get(p.id);return old&&old.vy<0&&p.vy>=0&&Math.abs(p.x+16-x)<60;} )&&!s.valves.includes(i))s.valves.push(i);trigger=s.valves.length===2;}
  if(map.id===2)trigger=t>=60&&t<120&&team.length>=Math.min(2,active.length)&&team.every(p=>p.y<510&&p.vy<0);
- if(map.id===3)trigger=team.some(p=>p.supportId&&Math.abs(p.x+16-(b.x+280))<65);
+ if(map.id===3)trigger=team.some(p=>(map.mode==='solo'?p.y<465:p.supportId)&&Math.abs(p.x+16-(b.x+280))<65);
  if(s.open===0){s.charge=trigger?s.charge+1:0;if(s.charge>= (map.id===0?24:1)){s.open=210;s.charge=0;s.valves=[];}}
  const view=bossView(map,world);
  for(const p of team){
   const old=previous.get(p.id);
-  if(view.open&&overlaps(p,view.rect)&&old&&old.y+32<=view.rect[1]+15&&p.vy>=0){s.hp--;s.open=0;s.charge=0;s.valves=[];p.vy=-12;p.invulnerable=75;if(s.hp===0)world.bossDefeated=true;break;}
+  if(view.open&&overlaps(p,view.rect)&&old&&old.y+32<=view.rect[1]+15&&p.vy>=0){s.hp--;s.open=0;s.charge=0;s.valves=[];s.mirrors=[];p.vy=-12;p.invulnerable=75;if(s.hp===0)world.bossDefeated=true;break;}
  }
  // Recompute after a successful hit: never punish a player with an obsolete attack.
  const attack=bossView(map,world);

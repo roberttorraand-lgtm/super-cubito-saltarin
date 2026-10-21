@@ -2,8 +2,9 @@ import { updateEncounters } from './encounters.js';
 // The same deterministic 60 Hz simulation runs on the server and in the browser.
 export const STEP_MS = 1000 / 60;
 export const SIZE = 32;
-import { levels } from './levels.js';
-export { levels };
+import { levels, soloLevels } from './levels.js';
+import { updateVillage } from './solo.js';
+export { levels, soloLevels };
 export const level = levels[0];
 export function newPlayer(id,name,color,map=level,spawnSlot=0){
   return {id,name,color,...map.spawn,x:map.spawn.x+spawnSlot*44,spawnSlot,vx:0,vy:0,grounded:false,checkpoint:-1,finished:false,deaths:0,lives:3,eliminated:false,invulnerable:0,
@@ -134,6 +135,7 @@ export function tickGroup(players,map,world,{mechanisms=true}={}){
   for(const p of players)if(!p.finished&&!p.eliminated&&!p.invulnerable&&hitsHazard(p,map,world))respawn(p,map);
   updateEnemies(players,previous,map,world);
   updateEncounters(players,previous,map,world,respawn);
+  updateVillage(players,map,world);
   if(mechanisms){updateMechanisms(players,map,world);updateCrumble(players,map,world);}
 }
 

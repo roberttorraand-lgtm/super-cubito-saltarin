@@ -1,3 +1,4 @@
+import { makeSoloLevels } from './solo.js';
 import { addEncounters } from './encounters.js';
 // Authored routes: [island width, surface height, gap after the island].
 // Geometry, mechanisms and movement rules are intentionally different per world.
@@ -76,3 +77,5 @@ for(const map of [forest,canyon,ice,moon]){
 canyon.belts=[4,6].map(i=>({x:canyon.platforms[i][0]+60,y:canyon.platforms[i][1],w:120,speed:-1.2}));
 export const levels=[forest,canyon,ice,moon];
 addEncounters(levels);
+
+export const soloLevels=makeSoloLevels(levels);

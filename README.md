@@ -86,3 +86,11 @@ Al final del recorrido hay un castillo o mansión con interior. La pelea empieza
 Con el escudo desactivado, saltad sobre el retrato. Tres golpes abren la meta. La vida del jefe y los enemigos derrotados se comparten entre todos los jugadores; el servidor valida el combate. Morir dentro devuelve a la entrada de la arena y consume una de las tres vidas del mundo. Si falta un compañero para resolver una mecánica, podéis votar reiniciar el mismo mundo.
 
 Hay 48 enemigos en total, incluidas las patrullas adicionales y los guardianes secretos. Los ataques usan el reloj de simulación compartido, con avisos antes de causar daño.
+
+### Aventura en solitario (0.8)
+
+Escribe tu nombre y pulsa **Jugar solo · NPCs y secretos**. No necesitas invitar a nadie. La partida individual usa mapas independientes y no admite otros jugadores. Sigue necesitando conexión al servidor.
+
+Los cuatro mundos tienen interruptores individuales, obstáculos ajustados, puentes que se abren con una sola placa y jefes que se pueden vencer sin compañeros. Los espejos del primer jefe quedan activados por separado; el último tiene un resorte para alcanzar su sello. Las tres vidas se restauran al cambiar de mundo, y puedes reintentar inmediatamente si se agotan.
+
+Hay doce NPCs con casitas y diálogos que aparecen al acercarte, y dieciséis archivos de memes para descubrir: Doge, triángulos Illuminati, caras troll y gatos arcoíris, dibujados localmente en canvas. Los coleccionables se registran una vez por mundo y no alteran las vidas. El modo cooperativo conserva sus mapas y mecánicas originales.

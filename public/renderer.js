@@ -107,6 +107,7 @@ export class Renderer {
     this.mechanisms(l,world,time,left,right);
     this.chaos(l,world,time,left,right);
     this.encounters(l,world,left,right);
+    this.village(l,world,time,left,right);
     l.checkpoints.forEach((point,i)=>{if(point.x>left&&point.x<right)this.flag(point.x,point.y,i<=(me?.checkpoint??-1)?'#b4f669':'#ffffffaa',time,'GUARDAR PROGRESO');});
     if(l.goal.x>left&&l.goal.x<right)this.flag(l.goal.x,l.goal.y,t.accent,time,'META DEL EQUIPO',true);
     const alive=new Set(players.map(p=>p.id));for(const key of this.visuals.keys())if(!alive.has(key))this.visuals.delete(key);
@@ -163,7 +164,7 @@ export class Renderer {
       }else{
         ctx.strokeStyle='#b8f58d';ctx.setLineDash([4,7]);ctx.strokeRect(x+5,y+7,w-10,h-9);ctx.setLineDash([]);
       }
-      label(open?'PASO ABIERTO':gate.material==='ice'?'DOS PLACAS · DESHIELO':'TORRE DE DOS CUBITOS',x+20,y-20);
+      label(open?'PASO ABIERTO':map.mode==='solo'?'ESCALÓN + INTERRUPTOR':gate.material==='ice'?'DOS PLACAS · DESHIELO':'TORRE DE DOS CUBITOS',x+20,y-20);
       if(!open&&gate.material!=='ice'){
         ctx.strokeStyle='#edfbd5';ctx.lineWidth=2;ctx.strokeRect(x-64,y+h-26,22,22);ctx.strokeRect(x-64,y+h-50,22,22);
         ctx.fillStyle='#edfbd5';ctx.fillText('↑',x-53,y+h-58);
@@ -184,7 +185,7 @@ export class Renderer {
         }
       }else{
         ctx.strokeStyle='#fff0b488';ctx.setLineDash([10,9]);ctx.lineWidth=3;ctx.strokeRect(x,y,w,h);ctx.setLineDash([]);
-        label('DOS PLACAS · DOS COMPAÑEROS',x+w/2,y-46);
+        label(map.mode==='solo'?'ACTIVA EL INTERRUPTOR':'DOS PLACAS · DOS COMPAÑEROS',x+w/2,y-46);
         const charge=world.charge?.[bridge.id]??0;
         ctx.fillStyle='#1f394966';ctx.fillRect(x+w/2-40,y-30,80,5);ctx.fillStyle='#b6f596';ctx.fillRect(x+w/2-40,y-30,Math.min(1,charge/12)*80,5);
       }
@@ -262,6 +263,29 @@ export class Renderer {
       ctx.fillStyle='#ffffffdd';ctx.font='bold 8px sans-serif';ctx.textAlign='center';ctx.fillText(names[enemy.kind],enemy.x+enemy.w/2,enemy.y-23);
     }
   }
+  memeFace(kind,x,y,size=32){
+    const c=this.ctx;c.save();c.translate(x,y);c.scale(size/32,size/32);
+    if(kind==='triangle'){c.fillStyle='#c4f279';c.beginPath();c.moveTo(0,-24);c.lineTo(-23,17);c.lineTo(23,17);c.closePath();c.fill();c.fillStyle='#fff';c.beginPath();c.ellipse(0,1,12,7,0,0,Math.PI*2);c.fill();c.fillStyle='#222';c.beginPath();c.arc(0,1,4,0,Math.PI*2);c.fill();}
+    else if(kind==='nyan'){for(let i=0;i<6;i++){c.fillStyle=['#f77','#fb6','#ff8','#8e9','#8bf','#c9f'][i];c.fillRect(-53,-15+i*5,40,5);}c.fillStyle='#eeb5cc';c.fillRect(-18,-17,36,30);c.fillStyle='#a6aabd';c.fillRect(9,-12,20,25);c.fillRect(9,-20,6,10);c.fillRect(24,-20,5,10);c.fillStyle='#222';c.fillRect(14,-4,3,3);c.fillRect(23,-4,3,3);}
+    else{c.fillStyle=kind==='doge'?'#ddb578':kind==='frog'?'#88b76f':'#faf9ee';c.beginPath();c.ellipse(0,0,22,18,0,0,Math.PI*2);c.fill();c.strokeStyle='#29333c';c.lineWidth=2;if(kind==='doge'){c.beginPath();c.moveTo(-20,-8);c.lineTo(-16,-29);c.lineTo(-5,-16);c.moveTo(5,-16);c.lineTo(17,-29);c.lineTo(20,-7);c.stroke();}c.fillStyle='#29333c';c.fillRect(-12,-6,5,4);c.fillRect(7,-6,5,4);c.beginPath();c.arc(0,2,12,0,Math.PI);c.stroke();if(kind==='troll')for(let x=-9;x<=9;x+=5)c.fillRect(x,3,2,6);}
+    c.restore();
+  }
+  village(map,world,time,left,right){
+    if(map.mode!=='solo')return;const c=this.ctx;
+    for(const n of map.villagers){
+      if(n.x+140<left||n.x-100>right)continue;
+      c.fillStyle='#e5d8b9';c.fillRect(n.x-80,n.y-135,120,135);c.strokeStyle='#5e5368';c.lineWidth=3;c.strokeRect(n.x-80,n.y-135,120,135);
+      c.fillStyle=n.color;c.beginPath();c.moveTo(n.x-98,n.y-135);c.lineTo(n.x-20,n.y-200);c.lineTo(n.x+58,n.y-135);c.closePath();c.fill();
+      c.fillStyle='#69566e';c.fillRect(n.x-36,n.y-65,32,65);c.fillStyle='#ffec9b';c.fillRect(n.x-65,n.y-110,24,25);c.fillRect(n.x+2,n.y-110,24,25);
+      this.memeFace(n.kind,n.x+65,n.y-28+(this.reduced?0:Math.sin(time*2)*2),24);
+      c.font='bold 11px sans-serif';c.textAlign='center';c.fillStyle='#273745';c.fillText(n.name,n.x+50,n.y-67);c.font='10px sans-serif';c.fillText('ACÉRCATE PARA CHARLAR',n.x+10,n.y-215);
+    }
+    for(const e of map.easterEggs){
+      if(e.x+70<left||e.x-70>right)continue;const found=(world.eggs??[]).includes(e.id);
+      c.globalAlpha=found?.3:1;this.memeFace(e.kind,e.x,e.y-12+(this.reduced?0:Math.sin(time*3)*5),23);c.globalAlpha=1;
+      c.font='bold 10px sans-serif';c.textAlign='center';c.fillStyle='#344455';c.fillText(found?'✓ ARCHIVO RECUPERADO':'ARCHIVO CURSED · 2016',e.x,e.y-52);
+    }
+  }
   encounters(map,world,left,right){
     if(!map.boss)return;
     const c=this.ctx,b=map.boss,s=world.boss;
@@ -297,7 +321,7 @@ export class Renderer {
       if(map.id===2)text(view.beat?'¡YA! · SALTAD JUNTOS':'ESPERAD LA SEÑAL',b.x+550,240,24);
     }
     if(map.id===0||map.id===1)for(const x of (map.id===0?[180,900]:[280,800])){c.fillStyle=map.id===0?'#8ee3ff':'#8dff9d';c.fillRect(b.x+x-45,592,90,8);text(map.id===0?'ESPEJO':'SALTA AQUÍ',b.x+x,570,11);}
-    if(map.id===3){c.strokeStyle='#ff9a78';c.strokeRect(b.x+230,500,100,35);text('TORRE DE CUBITOS',b.x+280,475,12);}
+    if(map.id===3){c.strokeStyle='#ff9a78';c.strokeRect(b.x+230,500,100,35);text(map.mode==='solo'?'RESORTE → SELLO':'TORRE DE CUBITOS',b.x+280,475,12);}
     if(s?.hp===0)text('JEFE DERROTADO · SALIDA ABIERTA →',b.x+720,300,23);
   }
   flag(x,y,color,time,label,goal=false){

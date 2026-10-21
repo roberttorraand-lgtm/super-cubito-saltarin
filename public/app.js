@@ -4,7 +4,7 @@ import { Renderer } from '/renderer.js';
 const $=s=>document.querySelector(s);
 const renderer=new Renderer($('#game'));
 renderer.setLevel(levels[0]);
-let socket,id,level,room='',busy=false,revision=0,phase='playing',levelIndex=0;
+let socket,id,level,room='',busy=false,revision=0,phase='playing',levelIndex=0,mode='coop';
 let players=[],local=null,previousLocal=null,pending=[],seq=0,accumulator=0,lastTime=performance.now();
 let correction={x:0,y:0},histories=new Map(),playerSignature='',ping=0,lastPing=0;
 let world=createWorld(),projectedWorld=createWorld(),ghosts=[];
@@ -14,7 +14,7 @@ const keys=new Set();
 $('#code').value=(new URLSearchParams(location.search).get('sala')||'').slice(0,6);
 function error(message){$('#error').textContent=message;}
 function resetLevel(m){
-  id=m.id;level=m.level;revision=m.revision;levelIndex=m.levelIndex;phase='playing';
+  id=m.id;level=m.level;mode=m.mode??'coop';revision=m.revision;levelIndex=m.levelIndex;phase='playing';
   world=m.world??createWorld();projectedWorld=structuredClone(world);ghosts=[];
   local=m.player?structuredClone(m.player):newPlayer(id,$('#name').value,'#b4f669',level);previousLocal={...local};
   pending=[];seq=0;correction={x:0,y:0};histories.clear();peerPresentation.clear();timeline=new SnapshotTimeline();players=[];keys.clear();accumulator=0;
@@ -26,6 +26,7 @@ function resetLevel(m){
 function updateState(m){
   if(m.revision!==revision)return;
   players=m.players;phase=m.phase;world=m.world??createWorld();
+  if(mode==='solo')$('#room-label').textContent=`EN SOLITARIO · ARCHIVOS ${world.eggs?.length??0} / ${level.easterEggs.length}`;
   const now=performance.now();timeline.push(m.frame,now);
   const authoritative=players.find(p=>p.id===id);
   if(authoritative){
@@ -67,22 +68,24 @@ function updateState(m){
   $('#victory').hidden=phase==='playing';
   if(phase!=='playing'){
     const final=phase==='complete',lost=phase==='defeated';
-    $('#victory-eyebrow').textContent=lost?'SE ACABARON LAS VIDAS':'¡LO HABÉIS CONSEGUIDO!';
-    $('#victory-title').textContent=lost?'El meme os ganó.':final?'¡Cuatro mundos, un equipo!':'¡Nivel superado!';
-    $('#victory-description').textContent=lost?'Votad todos para repetir este mundo con tres vidas nuevas.':final?'Habéis sobrevivido al caos. ¿Otra vuelta juntos?':`Siguiente parada: ${levels[levelIndex+1].name}. Todos recuperáis 3 vidas.`;
+    $('#victory-eyebrow').textContent=lost?'SE ACABARON LAS VIDAS':(mode==='solo'?'¡LO HAS CONSEGUIDO!':'¡LO HABÉIS CONSEGUIDO!');
+    $('#victory-title').textContent=lost?(mode==='solo'?'El meme te ganó.':'El meme os ganó.'):final?(mode==='solo'?'¡Cuatro mundos, un cubito!':'¡Cuatro mundos, un equipo!'):'¡Nivel superado!';
+    $('#victory-description').textContent=lost?(mode==='solo'?'Reintenta este mundo con tres vidas nuevas.':'Votad todos para repetir este mundo con tres vidas nuevas.'):final?(mode==='solo'?'Has sobrevivido al archivo cursed de 2016. ¿Otra vuelta?':'Habéis sobrevivido al caos. ¿Otra vuelta juntos?'):`Siguiente parada: ${levels[levelIndex+1].name}. Recuperas 3 vidas.`;
     const votes=lost?(m.restartReady??[]):m.ready,ready=votes.includes(id);$('#next').disabled=ready;
-    $('#next').textContent=ready?`Esperando al equipo (${votes.length}/${players.length})`:(lost?'Reintentar este mundo · 3 vidas':final?'Volver a jugar juntos ↗':'Siguiente mundo · 3 vidas ↗');
+    $('#next').textContent=ready?`Esperando al equipo (${votes.length}/${players.length})`:(lost?'Reintentar este mundo · 3 vidas':final?(mode==='solo'?'Volver a jugar ↗':'Volver a jugar juntos ↗'):'Siguiente mundo · 3 vidas ↗');
   }
   const objective=(level.objectives??[]).find(o=>!world.activated.includes(o.group));
   const pads=objective?level.plates.filter(p=>p.group===objective.group):[];
   const nearby=objective&&pads.length&&Math.min(...pads.map(p=>p.x))-(local?.x??0)<750;
   const hint=local?.zone==='boss'?level.boss.hint:local?.zone==='secret'?'SALA SECRETA · Llega a la puerta del fondo para obtener un escudo.':nearby?objective.hint:null;
   const movementTip=level.id===2?'Hielo: frena con tiempo y no te detengas sobre los puentes frágiles.':level.id===3?'Gravedad lunar: mantén el salto y calcula los pulsos de energía.':level.subtitle;
-  const instruction=hint??`${levelIndex+1} / ${levels.length} · ${movementTip}`;
+  const npc=(level.villagers??[]).find(n=>!local?.zone&&Math.abs(n.x-(local?.x??0))<125&&Math.abs(n.y-32-(local?.y??0))<85);
+  const egg=world.lastEgg?.until>world.frame?world.lastEgg.caption:null;
+  const instruction=(npc?`${npc.name}: ${npc.dialogue}`:egg)??hint??`${levelIndex+1} / ${levels.length} · ${movementTip}`;
   if($('#level-info').textContent!==instruction)$('#level-info').textContent=instruction;
-  $('#status').textContent=local?.eliminated?'SIN VIDAS · MODO ESPECTADOR':local?.finished?'EN LA META · ESPERANDO AL EQUIPO':players.length<2?'INVITA A ALGUIEN PARA COMPLETAR EL NIVEL':hint??(local?.checkpoint>=0?'PUNTO DE CONTROL GUARDADO':'¡JUNTOS HASTA LA BANDERA!');
+  $('#status').textContent=local?.eliminated?'SIN VIDAS · MODO ESPECTADOR':local?.finished?'EN LA META · ESPERANDO AL EQUIPO':mode!=='solo'&&players.length<2?'INVITA A ALGUIEN PARA COMPLETAR EL NIVEL':hint??(local?.checkpoint>=0?'PUNTO DE CONTROL GUARDADO':'¡JUNTOS HASTA LA BANDERA!');
 }
-function connect(joinExisting){
+function connect(joinExisting,solo=false){
   if(busy)return;
   if(!$('#name').value.trim()){$('#name').focus();return error('Ponle un nombre a tu cubito.');}
   const code=$('#code').value.trim().toUpperCase();
@@ -90,16 +93,16 @@ function connect(joinExisting){
   busy=true;error('Conectando…');$('#create').disabled=$('#join').disabled=true;
   socket=new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}`);
   const timeout=setTimeout(()=>socket.close(),15000);
-  socket.addEventListener('open',()=>socket.send(JSON.stringify({type:'join',name:$('#name').value,room:joinExisting?code:''})));
+  socket.addEventListener('open',()=>socket.send(JSON.stringify({type:'join',name:$('#name').value,room:joinExisting?code:'',mode:solo?'solo':'coop'})));
   socket.addEventListener('message',event=>{
     const m=JSON.parse(event.data);
     if(m.type==='error'){error(m.message);socket.close();return;}
     if(m.type==='welcome'){
       clearTimeout(timeout);resetLevel(m);room=m.room;busy=false;
-      $('#lobby').hidden=true;$('#life-hud').hidden=false;$('#copy').hidden=false;$('#fullscreen').hidden=false;
+      $('#lobby').hidden=true;$('#life-hud').hidden=false;$('#copy').hidden=mode==='solo';$('#fullscreen').hidden=false;
       $('#touch').hidden=!(matchMedia('(pointer:coarse)').matches||navigator.maxTouchPoints>0);
-      $('#room-label').textContent=`SALA ${room} · 2–4 JUGADORES`;
-      history.replaceState(null,'',`?sala=${room}`);
+      $('#room-label').textContent=mode==='solo'?'AVENTURA EN SOLITARIO · 1 JUGADOR':`SALA ${room} · 2–4 JUGADORES`;
+      history.replaceState(null,'',mode==='solo'?'?modo=solo':`?sala=${room}`);
     }
     if(m.type==='level')resetLevel(m);
     if(m.type==='state')updateState(m);
@@ -115,13 +118,14 @@ function connect(joinExisting){
       renderer.setLevel(levels[0]);$('#players').textContent='Tu equipo aparecerá aquí';
       $('#lobby').hidden=false;$('#life-hud').hidden=true;$('#restart-panel').hidden=true;$('#victory').hidden=true;$('#touch').hidden=true;$('#copy').hidden=true;$('#fullscreen').hidden=true;
       $('#code').value=room;$('#room-label').textContent='CONEXIÓN INTERRUMPIDA';$('#connection').textContent='Sin conexión';
-      error('Se ha perdido la conexión. Pulsa Entrar para volver a tu sala.');
+      error(mode==='solo'?'Se ha perdido la conexión. Pulsa Jugar solo para empezar una nueva aventura.':'Se ha perdido la conexión. Pulsa Entrar para volver a tu sala.');
     }else if($('#error').textContent==='Conectando…')error('No se pudo conectar con el servidor. Inténtalo de nuevo.');
   });
   socket.addEventListener('error',()=>error('No se pudo conectar con el servidor.'));
 }
 $('#join-form').addEventListener('submit',e=>{e.preventDefault();connect(false);});
 $('#join').addEventListener('click',()=>connect(true));
+$('#solo').addEventListener('click',()=>connect(false,true));
 $('#next').addEventListener('click',()=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:phase==='defeated'?'restart':'next',revision}));});
 $('#restart').addEventListener('click',()=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'restart',revision}));});
 $('#copy').addEventListener('click',async()=>{

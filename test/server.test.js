@@ -61,3 +61,13 @@ test('real WebSocket rooms: synchronization, authoritative limits, isolation, ca
   const forbidden=new WebSocket(`ws://127.0.0.1:${port}`,{origin:'https://different.example'});sockets.push(forbidden);
   assert.equal((await once(forbidden,'close'))[0],1008);
 });
+
+test('solo WebSocket room provides adapted maps and refuses other players',{timeout:8000},async t=>{
+ const proc=spawn(process.execPath,['server.js'],{env:{...process.env,PORT:'0',HOST:'127.0.0.1'},stdio:['ignore','pipe','pipe']});
+ const sockets=[];t.after(async()=>{for(const s of sockets)s.terminate();const exited=once(proc,'exit');proc.kill();await exited;});
+ const port=await new Promise((resolve,reject)=>{proc.stdout.on('data',d=>{const m=String(d).match(/escuchando en (\d+)/);if(m)resolve(+m[1]);});proc.once('error',reject);proc.once('exit',()=>reject(new Error('Server exited')));});
+ async function join(data){const s=new WebSocket(`ws://127.0.0.1:${port}`);sockets.push(s);await once(s,'open');const reply=once(s,'message');s.send(JSON.stringify({type:'join',name:'Solo',...data}));return JSON.parse((await reply)[0]);}
+ const first=await join({mode:'solo'});assert.equal(first.mode,'solo');assert.equal(first.level.mode,'solo');assert.equal(first.level.villagers.length,3);assert.equal(first.level.plates.length,1);
+ const intruder=await join({room:first.room});assert.equal(intruder.type,'error');assert.match(intruder.message,/individual/);
+ const second=await join({mode:'solo'});assert.notEqual(first.room,second.room);
+});

@@ -4,7 +4,7 @@ function seek(p,target){
   const desired=Math.max(-4,Math.min(4,(target-p.x)*.22));
   return {left:p.vx>desired+.55,right:p.vx<desired-.55,jump:false};
 }
-function route(p,map,world){
+export function route(p,map,world){
   let jump=p.jumpHeld;
   if(p.grounded){
     if(p.jumpHeld)jump=false;
@@ -58,4 +58,11 @@ export function teamController(){
     }
     return [ia,ib];
   };
+}
+
+export function soloController(p,map,world){
+ const input=route(p,map,world);
+ const objective=map.objectives.find(o=>!world.activated.includes(o.group));
+ if(objective){const pad=map.plates.find(p=>p.group===objective.group);if(pad&&Math.abs(p.y+32-pad.y)<5&&p.x>pad.x-85&&p.x<pad.x+pad.w+80)return seek(p,pad.x+6);}
+ return input;
 }
