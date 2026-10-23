@@ -1,6 +1,6 @@
-# Super Cubito Saltarín · Edición Exploradores
+# Super Cubito Saltarín · Nueva Dimensión 2.5D
 
-Plataformas de navegador con campaña individual y cooperativo online para 2–4 jugadores. Cuatro mundos, tres vidas por mundo, tres power-ups, 56 enemigos, casas habitadas, archivos de memes ocultos y cuatro jefes inspirados en las imágenes aportadas por el usuario.
+Plataformas 2.5D de navegador con campaña individual y cooperativo online para 2–4 jugadores. Cuatro mundos, tres vidas por mundo, tres power-ups, 56 enemigos, casas habitadas, archivos de memes ocultos y cuatro jefes inspirados en las imágenes aportadas por el usuario.
 
 ## Jugar
 
@@ -65,7 +65,21 @@ Entra al edificio del final con **E**. La pelea comienza cuando llegan todos los
 
 Los ataques avisan antes de causar daño. Cuando cae el escudo, salta sobre el retrato: tres golpes abren la meta. La vida del jefe se comparte entre los jugadores. Morir dentro de una arena consume una vida y devuelve a su entrada. Visitar una casa después de vencer al jefe nunca cuenta como terminar un mundo.
 
-## Arte, animación y fluidez (0.11)
+## Nueva dimensión 2.5D (0.12)
+
+El motor principal usa Three.js con geometría tridimensional, cámara en perspectiva, luces hemisféricas, iluminación direccional y sombras. El movimiento sigue siendo lateral: no hace falta controlar un eje de profundidad. El servidor, las colisiones, la predicción y los mapas individuales/cooperativos comparten las mismas reglas que antes.
+
+Los modelos originales se construyen localmente con geometrías reutilizadas: cubitos con rostros y escopeta, mochila propulsora o banana visibles; capibaras exploradores, tostadoras aladas, bananas luchadoras y patos con casco; árboles, formaciones rocosas, cristales, ruinas lunares, casas, muebles, castillos y cuatro monumentos propios. Las piernas y alas se articulan, los cuerpos anticipan ataques y reaccionan al aterrizar, cargar, derrapar o recibir daño. Las partículas de aterrizaje, derrotas y propulsión están limitadas a 120; el ambiente usa una sola malla instanciada. Los retratos aportados por el usuario se conservan como rostros de los guardianes tridimensionales de las arenas.
+
+Las plataformas tienen volumen y superficies alineadas con la física. Los NPCs quedan detrás del carril jugable para no tapar al personaje. Los interiores incluyen ventanas, estanterías, mesas, alfombras y buhardillas. El minimapa muestra únicamente compañeros de la misma zona y no revela secretos. Los indicadores de salud, dirección de ataque, escudo y vulnerabilidad usan los estados reales de la simulación.
+
+El botón **2.5D · AUTO** alterna calidad automática, ligera y alta. La ligera desactiva sombras y limita la resolución a DPR 1; la alta limita DPR a 1,5. Los dispositivos táctiles empiezan en ligera. En automático, una carga sostenida de fotogramas lentos también reduce la calidad. La geometría está agrupada por material y por isla; solo se envían a dibujar los tramos cercanos. Cambiar de mapa libera las geometrías, texturas y efectos de la escena anterior.
+
+Si WebGL2 no está disponible o el dispositivo pierde su contexto gráfico, se activa el renderizador 2D compatible sin desconectar la partida. Los jugadores 2D y 3D pueden compartir sala. El movimiento reducido desactiva balanceos, destellos y partículas decorativas, conservando los avisos de combate. El rendimiento depende del dispositivo: no se garantiza una tasa de fotogramas determinada.
+
+Three.js está fijado en el archivo de dependencias y se sirve desde el mismo servidor en su versión minificada; no se depende de CDNs ni de servicios de modelos. Las ilustraciones de la edición anterior siguen disponibles en el renderizador compatible.
+
+## Arte, animación y fluidez del modo compatible (0.11)
 
 Los fondos pintados de los cuatro mundos, las criaturas con transparencia, los iconos de equipo y los vecinos ilustrados son recursos locales originales generados para el juego. Los retratos de los jefes se adaptaron de las referencias del usuario. No se requieren servidores de imágenes ni fuentes externas.
 
@@ -94,6 +108,8 @@ npm start
 El servidor escucha en `0.0.0.0:3000`; `PORT` y `HOST` son opcionales. `npm run dev` reinicia al editar archivos. No necesita claves, cuentas ni base de datos.
 
 Las pruebas comprueban recorridos individuales y cooperativos hasta los castillos con entradas legales y tres vidas; física, apilamiento, paredes, hielo, barreras y enemigos; activación y daño de jefes; casas, conversaciones, entradas y salidas; ascenso físico a caminos ocultos y buhardillas; conservación de vidas y puntos de control; predicción; ráfagas de red; aislamiento y límites de salas; WebSockets reales y recursos HTTP.
+
+La regresión opcional del motor 3D se ejecuta con `python3 support/visual-3d.py` mientras el servidor está activo. Requiere Python Playwright y Chromium (solo para desarrollo). `CUBITO_URL` y `CHROMIUM_PATH` permiten cambiar dirección y navegador. Comprueba cooperación entre clientes 2D/3D, interiores y conversaciones, calidad gráfica, recuperación tras pérdida de contexto, jetpack móvil, los cuatro mundos y jefes, y estabilidad de geometrías tras cambios repetidos de nivel.
 
 La revisión en navegador comprueba crear y unirse, moverse entre casas y exterior, conversar, controles táctiles, movimiento reducido y renderizado de los cuatro mundos. Las comprobaciones locales no equivalen a verificar el despliegue público.
 

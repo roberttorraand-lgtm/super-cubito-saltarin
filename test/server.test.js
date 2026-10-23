@@ -15,8 +15,10 @@ test('real WebSocket rooms: synchronization, authoritative limits, isolation, ca
   const base=`http://127.0.0.1:${port}`;
   assert.equal((await fetch(`${base}/health`)).status,200);
   assert.match(await (await fetch(base)).text(),/Super Cubito/);
-  for(const file of ['/game.js','/levels.js','/netcode.js','/renderer.js','/encounters.js','/exploration.js','/solo.js','/art.js','/combat.js','/animation.js','/detail.js'])assert.equal((await fetch(base+file)).status,200);
+  for(const file of ['/game.js','/levels.js','/netcode.js','/renderer.js','/encounters.js','/exploration.js','/solo.js','/art.js','/combat.js','/animation.js','/detail.js','/graphics.js','/renderer3d.js','/models3d.js','/vendor/three.module.js','/vendor/three.core.js','/vendor/three.core.min.js'])assert.equal((await fetch(base+file)).status,200);
   assert.equal((await fetch(`${base}/missing`)).status,404);
+  assert.equal((await fetch(base+'/vendor/../package.json')).status,404);
+  const three=await fetch(base+'/vendor/three.module.js');assert.match(three.headers.get('content-type'),/javascript/);assert.match(await three.text(),/three.core.min.js/);
   const png=await fetch(base+'/assets/meme-atlas.png');assert.equal(png.status,200);
   for(const asset of ['boss-atlas','creatures','landscapes','residents','powerups','enemy-motion','world-relics'])assert.equal((await fetch(base+'/assets/'+asset+'.png')).status,200);
   assert.equal((await fetch(base+'/assets/creatures.png',{headers:{'If-None-Match':(await fetch(base+'/assets/creatures.png')).headers.get('etag')}})).status,304);

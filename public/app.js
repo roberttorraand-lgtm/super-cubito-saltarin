@@ -1,9 +1,12 @@
-import { nearbyInteraction, houseFor } from '/exploration.js';
+import { nearbyInteraction, houseFor, zoneBounds } from '/exploration.js';
 import { levels, newPlayer, createWorld, STEP_MS } from '/game.js';
 import { prediction, predictFrame, interpolate, SnapshotTimeline, PeerPresentation } from '/netcode.js';
-import { Renderer } from '/renderer.js';
+import { Renderer } from '/graphics.js';
 const $=s=>document.querySelector(s);
 const renderer=new Renderer($('#game'));
+renderer.attachButton($('#graphics'));
+// Expose read-only rendering metrics for device diagnostics.
+window.cubitoGraphics=()=>({...renderer.engine.stats,mode:renderer.engine.stats?.mode??'2D'});
 renderer.setLevel(levels[0]);
 let socket,id,level,room='',busy=false,revision=0,phase='playing',levelIndex=0,mode='coop';
 let players=[],local=null,previousLocal=null,pending=[],seq=0,accumulator=0,lastTime=performance.now();
@@ -12,6 +15,7 @@ let world=createWorld(),projectedWorld=createWorld(),ghosts=[];
 let timeline=new SnapshotTimeline();
 const peerPresentation=new PeerPresentation();
 const keys=new Set();
+const routeDots=new Map();
 let interactQueued=false,jumpQueued=false,useQueued=false,selectedPower=1;
 $('#code').value=(new URLSearchParams(location.search).get('sala')||'').slice(0,6);
 function error(message){$('#error').textContent=message;}
@@ -196,6 +200,11 @@ function draw(now){
     $('#power-meter').className=selectedPower===2?'fuel':charge>=60?'charged':'';
     const label=local.eliminated?'SIN VIDAS':selectedPower===2?`COMBUSTIBLE ${Math.round(fuel/180*100)}%`:selectedPower===1?(charge>=60?'EXPLOSIVO LISTO · SUELTA R':charge?'CARGANDO · MANTÉN R':cool?'RECARGANDO…':'R · TOQUE / MANTÉN 1 s'):cool?'PREPARANDO BANANA…':'R · BANANA: TODOS RESBALAN';
     if($('#power-status').textContent!==label)$('#power-status').textContent=label;
+  }
+  const routeMap=$('#route-map'),showRoute=!!id&&renderer.engine.stats?.mode==='2.5D';routeMap.hidden=!showRoute;
+  if(showRoute){const focus=visible.find(p=>p.id===id&&!p.eliminated)??visible.find(p=>!p.eliminated)??local;const bounds=zoneBounds(level,focus),connected=new Set(visible.map(p=>p.id));
+    for(const [key,dot] of routeDots)if(!connected.has(key)){dot.remove();routeDots.delete(key);}
+    for(const p of visible){let dot=routeDots.get(p.id);if(!dot){dot=document.createElement('i');dot.style.backgroundColor=p.color;dot.title=p.name;routeDots.set(p.id,dot);routeMap.append(dot);}dot.hidden=p.eliminated||p.zone!==focus?.zone;dot.className=p.id===id?'you':'';dot.style.left=`${Math.max(0,Math.min(100,(p.x-bounds.x)/bounds.w*100))}%`;}
   }
   renderer.draw(visible,id,now/1000,dt,{...displayWorld,projectiles:projectedWorld.projectiles??world.projectiles,puddles:projectedWorld.puddles??world.puddles,explosions:projectedWorld.explosions??world.explosions});
   requestAnimationFrame(draw);
