@@ -1,4 +1,4 @@
-# Turno Cero · Brasa Burger 0.3
+# Turno Cero · Brasa Burger 0.4
 
 Prototipo gratuito de terror en primera persona para Windows 10/11 de 64 bits, programado con Three.js y Electron. No utiliza Godot. La aplicación descargable abre su propia ventana y funciona sin abrir un navegador ni instalar herramientas de desarrollo.
 
@@ -12,12 +12,32 @@ La noche dura **16 minutos reales**: de 23:00 a 00:00 tienes dos minutos para pr
 - **Mayús:** correr, consumiendo resistencia y haciendo ruido. **C:** agacharse.
 - **E:** usar puertas, esconderse, salir, recargar o recoger latas.
 - **F:** encender/apagar la linterna. **Tab:** abrir/guardar el teléfono.
-- **G:** lanzar una lata para distraer. Hay tres; el dispensador permite reponerlas con un intervalo de 45 segundos.
+- **G:** lanzar una lata para distraer. Hay tres; el dispensador permite reponerlas con un intervalo de 45 a 65 segundos según la noche.
 - **Esc:** menú y manual. En individual pausa el turno; en cooperativo la noche continúa.
 
 El teléfono ofrece seis cámaras que renderizan el escenario real, incluidos animatrónicos y compañeros. Tiene batería finita; con el teléfono guardado puedes recargarla cerca de la base de seguridad. La linterna también consume lentamente la batería. Dos puertas blindadas tienen reservas independientes: gastan al cerrarse, se abren si se agotan y recargan abiertas. No pueden cerrarse sobre un guardia.
 
-Los escondites bloquean el movimiento mientras estás dentro y conservan una salida válida. Si un enemigo te ve entrar puede encontrarte durante los segundos siguientes. Tras 45 segundos seguidos en un escondite, la respiración puede atraer a los enemigos cercanos; no basta con permanecer escondido toda la noche. Los compañeros muertos observan a los supervivientes; si todos mueren, termina la partida. Basta con que un guardia alcance las 07:00 para que el equipo sobreviva.
+Los escondites bloquean el movimiento mientras estás dentro y conservan una salida válida. Si un enemigo te ve entrar puede encontrarte durante los segundos siguientes. Tras 45 segundos seguidos en un escondite durante la primera noche (29 en la quinta), la respiración puede atraer a los enemigos cercanos; no basta con permanecer escondido toda la noche. Los compañeros muertos observan a los supervivientes; si todos mueren, termina la partida. Basta con que un guardia alcance las 07:00 para que el equipo sobreviva.
+
+## Campaña de cinco noches
+
+Cada turno conserva los 16 minutos reales y los dos minutos seguros de preparación. Sobrevivir desbloquea el siguiente; puedes repetir cualquier noche superada. Perder no borra los desbloqueos. En cooperativo manda la elección del anfitrión; los invitados pueden acompañarlo aunque aún no tengan esa noche desbloqueada. La victoria del equipo cuenta para los participantes conectados, incluidos los guardias que hayan caído. Los desbloqueos siguen exigiendo completar las noches anteriores.
+
+| Noche | Turno | Cambios principales |
+| --- | --- | --- |
+| 1 | Contrato de prueba | Reglas iniciales; el Asador despierta a las 03:00. |
+| 2 | Fuera de horario | Más velocidad, oído y memoria; salidas más tempranas. |
+| 3 | Fallo de suministro | Cortes de 16 s cada 180 s de peligro; aviso ocho segundos antes. |
+| 4 | El turno compartido | Soldador avisa a los demás de tu última posición; Asador desde la 01:00; cortes de 20 s cada 150 s. |
+| 5 | Última nómina | Todos despiertan a las 00:00; mayor presión, menos aturdimiento con luz; cortes de 22 s cada 120 s. |
+
+El primer corte llega después de un intervalo completo de peligro, nunca durante la preparación. Durante un corte fallan las cámaras y las bases de recarga, pero la linterna sigue funcionando y las puertas mantienen sus reservas propias. La iluminación cambia también en el perfil ligero. El teléfono muestra la pérdida de señal y el HUD indica cuánto falta para recuperarla. Hay avisos sonoros; el ajuste de movimiento reducido evita parpadeos decorativos.
+
+Las noches posteriores también aumentan el consumo de batería y puertas, reducen su recuperación y el tiempo que puedes esconderte sin hacer ruido. Las latas duran menos y tardan más en reponerse. Pulsar E en la base ya no concede batería instantánea: hay que permanecer junto a ella con el teléfono guardado. Soldador comparte una posición, no sigue a través de paredes a un guardia invisible: moverte después de perderlo sirve para despistarlos.
+
+Cada noche tiene su presentación, reglas consultables con Esc y cierre al amanecer. La quinta termina el expediente. Iniciar otro turno reinicia recursos, enemigos y reloj. Un guardado manual conserva su número de noche, el momento del corte y el plazo para reponer latas. Los guardados de 0.3 siguen cargándose como noche uno.
+
+El progreso se guarda automáticamente en `campana.json` dentro de los datos de la aplicación; la partida manual sigue en `turno-cero.json`. Son independientes: guardar durante una noche no la marca como superada. Si no se puede escribir el progreso, se avisa y los desbloqueos permanecen en esa sesión. En desarrollo se usa `localStorage`.
 
 ## Animatrónicos originales
 
@@ -26,7 +46,7 @@ Los modelos mecánicos se construyen con geometría 3D propia, inspirada en las 
 - **Padre Prisma:** rizos, lentes azules y traje ceremonial. Detecta teléfonos cercanos; la linterna frontal lo aturde brevemente, con un intervalo entre aturdimientos.
 - **Chef Soldador:** cocinero industrial con delantal, depósito y herramienta verde. Oye carreras y distracciones a mayor distancia.
 - **Don 67:** mandíbula mecánica, gafas doradas y camisa estampada. Se detiene al ser observado directamente, sin usar el teléfono.
-- **El Asador:** armadura quemada y cables rojos. Despierta a las 03:00, acelera por ráfagas y golpea las puertas para consumir su reserva.
+- **El Asador:** armadura quemada y cables rojos. Despierta a las 03:00 en la primera noche y cada vez antes hasta medianoche en la quinta, acelera por ráfagas y golpea las puertas para consumir su reserva.
 
 Tienen patrulla, investigación y persecución, con navegación sobre los mismos obstáculos que la física del jugador. El juego usa materiales con texturas procedurales y filtrado de píxel, luces por sala, linterna con sombras, cámaras a mayor resolución, animación de articulaciones y sonido sintetizado. La preferencia de movimiento reducido desactiva balanceo de cámara y movimientos decorativos.
 
@@ -36,7 +56,7 @@ El **individual funciona sin Internet en el ejecutable**: el programa inicia un 
 
 El **cooperativo online admite 2–4 guardias y lo simula el ordenador del anfitrión**, en un worker separado del dibujo. Cada instalación ya contiene el mapa, las texturas y los modelos: no se descargan del anfitrión ni se envían en los estados de red. El anfitrión valida entradas y calcula enemigos, recursos, puertas y victoria a 30 pasos por segundo; envía estados compactos diez veces por segundo. Solo él puede empezar y guardar la partida.
 
-El servicio de Render sirve como punto de encuentro por código y negocia WebRTC. Se intenta un canal de datos directo anfitrión–invitado. Si la red lo impide, se usa retransmisión WebSocket: **el servicio reenvía los paquetes, pero no simula la partida**, incluso en esta ruta. No hace falta abrir puertos manualmente. La interfaz indica quién es el anfitrión y cuándo se usa el enlace de apoyo. Todos los jugadores necesitan la versión 0.3; el protocolo rechaza clientes incompatibles.
+El servicio de Render sirve como punto de encuentro por código y negocia WebRTC. Se intenta un canal de datos directo anfitrión–invitado. Si la red lo impide, se usa retransmisión WebSocket: **el servicio reenvía los paquetes, pero no simula la partida**, incluso en esta ruta. No hace falta abrir puertos manualmente. La interfaz indica quién es el anfitrión y cuándo se usa el enlace de apoyo. Todos los jugadores necesitan la versión 0.4; el protocolo rechaza clientes incompatibles.
 
 Las conexiones directas ya establecidas están diseñadas para continuar si se pierde el punto de encuentro. Las conexiones que usan retransmisión sí lo necesitan mientras juegan. Si el anfitrión sale o cierra el programa, la partida termina para los invitados; no hay transferencia automática de anfitrión. El anfitrión puede volver a crear una sala desde su guardado local. Su ordenador debe permanecer encendido.
 
@@ -54,7 +74,7 @@ npm test
 npm run desktop
 ```
 
-`npm start` sirve la vista de desarrollo en `http://localhost:3000`. `PORT` y `HOST` son opcionales. Render usa únicamente las dependencias de producción y ejecuta las pruebas antes de arrancar el servidor cooperativo.
+`npm start` sirve la vista de desarrollo en `http://localhost:3000`. `PORT` y `HOST` son opcionales. Render usa únicamente las dependencias de producción y ejecuta las pruebas antes de arrancar el servicio de enlace.
 
 ```sh
 npm run package:win
@@ -74,7 +94,7 @@ El objetivo es mejorar la fluidez; no se garantiza una tasa determinada. Windows
 
 ## Estado y validación
 
-Es una primera noche jugable para **Windows 10 y 11 de 64 bits**. No se prepara una edición para Windows 7/8. Modelos, sonidos, animaciones y equilibrio siguen siendo provisionales; todavía hacen falta pruebas reales del ejecutable en Windows y de conexiones directas entre redes domésticas.
+Es una campaña de cinco noches jugables para **Windows 10 y 11 de 64 bits**. No se prepara una edición para Windows 7/8. Modelos, sonidos, animaciones y equilibrio siguen siendo provisionales; todavía hacen falta pruebas reales del ejecutable en Windows, ajuste de dificultad mediante partidas completas y conexiones directas entre redes domésticas.
 
 `npm test` comprueba reloj, navegación, puertas, recursos, escondites, patrones, guardado, victoria/derrota, autoridad del anfitrión, límites de salas, paquetes compactos sin mapa, negociación SDP/ICE y retransmisión. El antiguo punto WebSocket rechaza cooperativo centralizado.
 
@@ -82,4 +102,12 @@ Es una primera noche jugable para **Windows 10 y 11 de 64 bits**. No se prepara 
 
 La revisión visual opcional general usa `python3 scripts/smoke-browser.py`, con el servidor activo, Python Playwright y Chromium. `TURNO_URL` y `CHROMIUM_PATH` permiten cambiar dirección y navegador. No equivale a probar Windows ni el servicio público.
 
-Capturas: [menú](docs/screenshots/v0.3-menu.png), [seguridad](docs/screenshots/v0.3-seguridad.png), [cámaras](docs/screenshots/v0.3-camaras.png), [cooperativo](docs/screenshots/v0.3-cooperativo.png) y [perfil ligero](docs/screenshots/v0.3-ligero.png).
+Capturas de la campaña 0.4: [selección de noches](docs/screenshots/v0.4-campana.png), [corte eléctrico](docs/screenshots/v0.4-corte-electrico.png) y [expediente completo](docs/screenshots/v0.4-campana-completa.png).
+
+Capturas de la versión anterior: [menú](docs/screenshots/v0.3-menu.png), [seguridad](docs/screenshots/v0.3-seguridad.png), [cámaras](docs/screenshots/v0.3-camaras.png), [cooperativo](docs/screenshots/v0.3-cooperativo.png) y [perfil ligero](docs/screenshots/v0.3-ligero.png).
+
+La comprobación `python3 scripts/campaign-browser.py` usa guardados de prueba próximos al amanecer para verificar en clientes reales las cinco victorias, desbloqueos, repetición, recursos de un turno nuevo, persistencia tras recargar, pérdida/recuperación de cámaras y elección del anfitrión. No equivale a sobrevivir manualmente cinco turnos completos. Guarda el informe en `docs/screenshots/campaign-verification.json` y capturas de la campaña, corte eléctrico y final.
+
+## Hardware orientativo
+
+Objetivo inicial para jugar en perfil Ligero a 1280 × 720: Windows 10/11 de 64 bits, Intel Core i3-8100 o AMD Ryzen 3 3100, 8 GB de RAM, NVIDIA GTX 1050 o AMD RX 560 con 2 GB de VRAM, controlador con WebGL2 y 1 GB libre (incluyendo margen para extraer el paquete). Para cooperativo hace falta conexión estable; el anfitrión carga además con la simulación. Es una recomendación provisional, no un mínimo medido ni una promesa de FPS: aún no se ha validado en ese hardware.

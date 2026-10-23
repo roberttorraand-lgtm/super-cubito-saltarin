@@ -6,7 +6,7 @@ onmessage=event=>{
  const {type,peer,data,code}=event.data??{};
  try{
   if(type==='create'){
-   if(session)throw Error('La partida ya existe.');session=new HostSession(code,data.save);
+   if(session)throw Error('La partida ya existe.');session=new HostSession(code,data.save,data.night);
    send('host',session.join('host',data.name));return;
   }
   if(!session)return;

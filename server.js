@@ -4,7 +4,7 @@ import {randomBytes,randomUUID} from 'node:crypto';
 import {WebSocketServer,WebSocket} from 'ws';
 import {attachSignaling} from './signaling.js';
 import {newWorld,newPlayer,step,snapshot,restore,DT} from './shared/simulation.js';
-const files=new Map([['/retro-light.js',['public/retro-light.js','text/javascript']],['/batch.js',['public/batch.js','text/javascript']],['/transport.js',['public/transport.js','text/javascript']],['/host-worker.js',['public/host-worker.js','text/javascript']],['/shared/host-session.js',['shared/host-session.js','text/javascript']],
+const files=new Map([['/shared/nights.js',['shared/nights.js','text/javascript']],['/retro-light.js',['public/retro-light.js','text/javascript']],['/batch.js',['public/batch.js','text/javascript']],['/transport.js',['public/transport.js','text/javascript']],['/host-worker.js',['public/host-worker.js','text/javascript']],['/shared/host-session.js',['shared/host-session.js','text/javascript']],
  ['/',['public/index.html','text/html']],['/style.css',['public/style.css','text/css']],['/app.js',['public/app.js','text/javascript']],['/scene.js',['public/scene.js','text/javascript']],['/models.js',['public/models.js','text/javascript']],['/sound.js',['public/sound.js','text/javascript']],
  ['/shared/world.js',['shared/world.js','text/javascript']],['/shared/simulation.js',['shared/simulation.js','text/javascript']],
  ['/vendor/three.module.js',['node_modules/three/build/three.module.min.js','text/javascript']],['/vendor/three.core.min.js',['node_modules/three/build/three.core.min.js','text/javascript']],
@@ -12,7 +12,7 @@ const files=new Map([['/retro-light.js',['public/retro-light.js','text/javascrip
 export function createGameServer({allowSolo=true}={}){
  const server=http.createServer(async(req,res)=>{let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{res.writeHead(400);return res.end();}
   const headers={'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"};
-  if(path==='/health'){res.writeHead(200,{...headers,'Content-Type':'application/json'});return res.end(JSON.stringify({ok:true,version:'0.3.0',game:'turno-cero',simulationRooms:rooms.size,linkRooms:signaling.rooms.size}));}
+  if(path==='/health'){res.writeHead(200,{...headers,'Content-Type':'application/json'});return res.end(JSON.stringify({ok:true,version:'0.4.0',game:'turno-cero',simulationRooms:rooms.size,linkRooms:signaling.rooms.size}));}
   const file=files.get(path);if(!file){res.writeHead(404,headers);return res.end('No encontrado');}
   try{const data=await readFile(new URL(file[0],import.meta.url));res.writeHead(200,{...headers,'Content-Type':file[1]+'; charset=utf-8'});res.end(data);}catch{res.writeHead(500,headers);res.end('No se pudo cargar el juego.');}
  });
@@ -32,7 +32,7 @@ export function createGameServer({allowSolo=true}={}){
     if(m.mode==='coop')return send(ws,{type:'error',text:'Actualiza el juego: el cooperativo ahora se ejecuta en el ordenador del anfitrión.'});
     let room;const code=typeof m.code==='string'?m.code.toUpperCase().trim():'';
     if(code){room=rooms.get(code);if(!room||room.mode==='solo')return send(ws,{type:'error',text:'La sala no existe o es individual.'});if(room.clients.size>=4)return send(ws,{type:'error',text:'La sala ya tiene cuatro guardias.'});}
-    else{if(rooms.size>=100)return send(ws,{type:'error',text:'Servidor ocupado.'});let code;do{code=randomBytes(3).toString('hex').toUpperCase();}while(rooms.has(code));room={code,mode:m.mode==='coop'?'coop':'solo',started:false,world:newWorld(),clients:new Set(),saved:[]};
+    else{if(rooms.size>=100)return send(ws,{type:'error',text:'Servidor ocupado.'});let code;do{code=randomBytes(3).toString('hex').toUpperCase();}while(rooms.has(code));room={code,mode:m.mode==='coop'?'coop':'solo',started:false,world:newWorld(m.night),clients:new Set(),saved:[]};
      if(m.save){try{const data=restore(m.save);room.world=data.world;room.saved=data.players;}catch{return send(ws,{type:'error',text:'La partida guardada no es válida.'});}}
      rooms.set(code,room);
     }

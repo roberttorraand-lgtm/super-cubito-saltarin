@@ -1,4 +1,4 @@
-const OPEN=1,CLOSED=3,PROTOCOL=3;
+const OPEN=1,CLOSED=3,PROTOCOL=4;
 const configuration={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
 const endpoint=(base,path)=>{const u=new URL(path,base);if(!['https:','http:'].includes(u.protocol))throw Error('Dirección de enlace no válida.');u.protocol=u.protocol==='https:'?'wss:':'ws:';return u;};
 class Link extends EventTarget{

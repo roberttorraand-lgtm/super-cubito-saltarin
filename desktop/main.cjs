@@ -11,6 +11,8 @@ app.whenReady().then(async()=>{
  const check=e=>{if(e.sender!==win?.webContents)throw new Error('Emisor no permitido');};
  ipcMain.handle('save',async(e,data)=>{check(e);const text=JSON.stringify(data);if(text.length>150000||data?.version!==1)throw new Error('Partida no válida');const dir=app.getPath('userData');await fs.mkdir(dir,{recursive:true});const target=path.join(dir,'turno-cero.json');await fs.writeFile(target+'.tmp',text,'utf8');await fs.rename(target+'.tmp',target);return true;});
  ipcMain.handle('load',async(e)=>{check(e);try{return JSON.parse(await fs.readFile(path.join(app.getPath('userData'),'turno-cero.json'),'utf8'));}catch{return null;}});
+ ipcMain.handle('progress:save',async(e,data)=>{check(e);const {campaignProgress}=await import('../shared/nights.js');const text=JSON.stringify(campaignProgress(data)),dir=app.getPath('userData');await fs.mkdir(dir,{recursive:true});const target=path.join(dir,'campana.json');await fs.writeFile(target+'.tmp',text,'utf8');await fs.rename(target+'.tmp',target);return true;});
+ ipcMain.handle('progress:load',async e=>{check(e);try{return JSON.parse(await fs.readFile(path.join(app.getPath('userData'),'campana.json'),'utf8'));}catch{return null;}});
  ipcMain.handle('fullscreen',(e)=>{check(e);win.setFullScreen(!win.isFullScreen());return win.isFullScreen();});
  ipcMain.handle('quit',(e)=>{check(e);app.quit();});
  await win.loadURL(origin);

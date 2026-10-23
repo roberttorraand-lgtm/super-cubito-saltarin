@@ -19,14 +19,14 @@ export function prepareRetroLighting(meshes,lights,torch){
   g.setAttribute('color',new T.BufferAttribute(colors,3));
   const source=mesh.material,material=new T.MeshBasicMaterial({color:source.color,map:source.map,vertexColors:true,side:source.side,fog:true});
   material.onBeforeCompile=shader=>{
-   shader.uniforms.uRetroPosition=torch.position;shader.uniforms.uRetroDirection=torch.direction;shader.uniforms.uRetroStrength=torch.strength;
+   shader.uniforms.uRetroAmbient=torch.ambient;shader.uniforms.uRetroPosition=torch.position;shader.uniforms.uRetroDirection=torch.direction;shader.uniforms.uRetroStrength=torch.strength;
    shader.vertexShader='varying vec3 vRetroPosition;\n'+shader.vertexShader;
    shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\nvRetroPosition=(modelMatrix*vec4(transformed,1.0)).xyz;');
-   shader.fragmentShader='varying vec3 vRetroPosition;uniform vec3 uRetroPosition;uniform vec3 uRetroDirection;uniform float uRetroStrength;\n'+shader.fragmentShader;
+   shader.fragmentShader='varying vec3 vRetroPosition;uniform vec3 uRetroPosition;uniform vec3 uRetroDirection;uniform float uRetroStrength;uniform float uRetroAmbient;\n'+shader.fragmentShader;
    shader.fragmentShader=shader.fragmentShader.replace('#include <opaque_fragment>',`vec3 retroDelta=vRetroPosition-uRetroPosition;
     float retroDistance=length(retroDelta);
     float retroCone=smoothstep(0.82,0.96,dot(normalize(retroDelta),uRetroDirection));
-    outgoingLight*=0.85+uRetroStrength*retroCone/(1.0+0.09*retroDistance*retroDistance);
+    outgoingLight*=uRetroAmbient+uRetroStrength*retroCone/(1.0+0.09*retroDistance*retroDistance);
     #include <opaque_fragment>`);
   };
   material.customProgramCacheKey=()=> 'turno-retro-1';pairs.push({mesh,normal:source,low:material});

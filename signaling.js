@@ -1,6 +1,6 @@
 import {randomBytes,randomUUID} from 'node:crypto';
 import {WebSocketServer,WebSocket} from 'ws';
-export const LINK_PROTOCOL=3;
+export const LINK_PROTOCOL=4;
 export function attachSignaling(server){
  const rooms=new Map(),wss=new WebSocketServer({noServer:true,maxPayload:160000});
  const send=(ws,m)=>{if(ws.readyState===WebSocket.OPEN&&ws.bufferedAmount<512000)ws.send(JSON.stringify(m));};

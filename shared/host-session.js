@@ -2,9 +2,9 @@ import {newWorld,newPlayer,step,snapshot,restore} from './simulation.js';
 
 // Runs on the host's machine. No map, models or AI simulation live in the broker.
 export class HostSession {
-  constructor(code,save=null){
+  constructor(code,save=null,night=1){
     const restored=save?restore(save):null;
-    this.code=code;this.world=restored?.world??newWorld();this.saved=restored?.players??[];
+    this.code=code;this.world=restored?.world??newWorld(night);this.saved=restored?.players??[];
     this.members=new Map();this.started=false;this.owner=null;
   }
   get players(){return [...this.members.values()].map(m=>m.player);}
@@ -51,7 +51,7 @@ export class HostSession {
   state(){
     const w=this.world;
     return {type:'state',code:this.code,host:this.members.get(this.owner)?.player.id,mode:'coop',started:this.started,
-      world:{version:w.version,frame:w.frame,elapsed:w.elapsed,status:w.status,paused:false,doors:w.doors,event:w.event,
+      world:{version:w.version,night:w.night,power:w.power,frame:w.frame,elapsed:w.elapsed,status:w.status,paused:false,doors:w.doors,event:w.event,
         enemies:w.enemies.map(({id,x,z,yaw,state})=>({id,x,z,yaw,state}))},
       players:this.players.map(({input,held,fireRequest,...p})=>p)};
   }
