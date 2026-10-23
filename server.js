@@ -2,20 +2,22 @@ import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {WebSocketServer,WebSocket} from 'ws';
+import {attachSignaling} from './signaling.js';
 import {newWorld,newPlayer,step,snapshot,restore,DT} from './shared/simulation.js';
-const files=new Map([
+const files=new Map([['/retro-light.js',['public/retro-light.js','text/javascript']],['/batch.js',['public/batch.js','text/javascript']],['/transport.js',['public/transport.js','text/javascript']],['/host-worker.js',['public/host-worker.js','text/javascript']],['/shared/host-session.js',['shared/host-session.js','text/javascript']],
  ['/',['public/index.html','text/html']],['/style.css',['public/style.css','text/css']],['/app.js',['public/app.js','text/javascript']],['/scene.js',['public/scene.js','text/javascript']],['/models.js',['public/models.js','text/javascript']],['/sound.js',['public/sound.js','text/javascript']],
  ['/shared/world.js',['shared/world.js','text/javascript']],['/shared/simulation.js',['shared/simulation.js','text/javascript']],
  ['/vendor/three.module.js',['node_modules/three/build/three.module.min.js','text/javascript']],['/vendor/three.core.min.js',['node_modules/three/build/three.core.min.js','text/javascript']],
 ]);
-export function createGameServer(){
+export function createGameServer({allowSolo=true}={}){
  const server=http.createServer(async(req,res)=>{let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{res.writeHead(400);return res.end();}
   const headers={'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"};
-  if(path==='/health'){res.writeHead(200,{...headers,'Content-Type':'application/json'});return res.end('{"ok":true,"version":"0.2.0","game":"turno-cero"}');}
+  if(path==='/health'){res.writeHead(200,{...headers,'Content-Type':'application/json'});return res.end(JSON.stringify({ok:true,version:'0.3.0',game:'turno-cero',simulationRooms:rooms.size,linkRooms:signaling.rooms.size}));}
   const file=files.get(path);if(!file){res.writeHead(404,headers);return res.end('No encontrado');}
   try{const data=await readFile(new URL(file[0],import.meta.url));res.writeHead(200,{...headers,'Content-Type':file[1]+'; charset=utf-8'});res.end(data);}catch{res.writeHead(500,headers);res.end('No se pudo cargar el juego.');}
  });
- const rooms=new Map(),wss=new WebSocketServer({server,path:'/ws',maxPayload:160000});
+ const rooms=new Map(),wss=new WebSocketServer({noServer:true,maxPayload:160000}),signaling=attachSignaling(server);
+ server.on('upgrade',(req,socket,head)=>{let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{return socket.destroy();}if(path==='/ws')wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,req));else if(path!=='/signal')socket.destroy();});
  const send=(c,m)=>{if(c.readyState===WebSocket.OPEN)c.send(JSON.stringify(m));};
  const players=r=>[...r.clients].map(c=>c.player),host=r=>[...r.clients][0]?.player.id;
  const state=r=>({type:'state',code:r.code,host:host(r),mode:r.mode,started:r.started,world:r.world,players:players(r)});
@@ -26,6 +28,8 @@ export function createGameServer(){
    let m;try{m=JSON.parse(raw);}catch{return;}if(!m||typeof m!=='object')return;
    const r=ws.room;
    if(m.type==='join'&&!r){
+    if(!allowSolo)return send(ws,{type:'error',text:'El individual se ejecuta en tu ordenador. Abre el programa de Windows.'});
+    if(m.mode==='coop')return send(ws,{type:'error',text:'Actualiza el juego: el cooperativo ahora se ejecuta en el ordenador del anfitrión.'});
     let room;const code=typeof m.code==='string'?m.code.toUpperCase().trim():'';
     if(code){room=rooms.get(code);if(!room||room.mode==='solo')return send(ws,{type:'error',text:'La sala no existe o es individual.'});if(room.clients.size>=4)return send(ws,{type:'error',text:'La sala ya tiene cuatro guardias.'});}
     else{if(rooms.size>=100)return send(ws,{type:'error',text:'Servidor ocupado.'});let code;do{code=randomBytes(3).toString('hex').toUpperCase();}while(rooms.has(code));room={code,mode:m.mode==='coop'?'coop':'solo',started:false,world:newWorld(),clients:new Set(),saved:[]};
@@ -55,6 +59,6 @@ export function createGameServer(){
  }}},5);
  const heartbeat=setInterval(()=>{for(const c of wss.clients){if(!c.alive){c.terminate();continue;}c.alive=false;c.ping();}},15000);
  server.on('close',()=>{clearInterval(loop);clearInterval(heartbeat);});
- return {server,rooms,close:()=>{for(const c of wss.clients)c.terminate();wss.close();server.close();clearInterval(loop);clearInterval(heartbeat);}};
+ return {server,rooms,signaling,close:()=>{signaling.close();for(const c of wss.clients)c.terminate();wss.close();server.close();clearInterval(loop);clearInterval(heartbeat);}};
 }
-if(process.argv[1]&&import.meta.url===new URL(process.argv[1],'file:').href){const app=createGameServer();app.server.listen(Number(process.env.PORT??3000),process.env.HOST??'0.0.0.0',()=>console.log(`Turno Cero escuchando en ${app.server.address().port}`));for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{app.close();});}
+if(process.argv[1]&&import.meta.url===new URL(process.argv[1],'file:').href){const app=createGameServer({allowSolo:process.env.RENDER!=='true'});app.server.listen(Number(process.env.PORT??3000),process.env.HOST??'0.0.0.0',()=>console.log(`Turno Cero escuchando en ${app.server.address().port}`));for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{app.close();});}

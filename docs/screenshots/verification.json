@@ -1,0 +1,14 @@
+{
+  "single_normal_fps": 6.4,
+  "single_low_fps": 17,
+  "direct_test": "Unavailable: managed Chromium gathered no ICE candidates; automatic relay verified.",
+  "relay_keeps_simulation_on_host": true,
+  "page_errors": [],
+  "screenshots": [
+    "v0.3-menu.png",
+    "v0.3-ligero.png",
+    "v0.3-camaras.png",
+    "v0.3-seguridad.png",
+    "v0.3-cooperativo.png"
+  ]
+}

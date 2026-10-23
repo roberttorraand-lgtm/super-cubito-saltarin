@@ -1,7 +1,8 @@
+import {batchMeshes} from '/batch.js';
 import * as T from '/vendor/three.module.js';
 export class Art {
  constructor(){this.mats=new Map();this.geos={box:new T.BoxGeometry(1,1,1),ball:new T.SphereGeometry(.5,10,7),cyl:new T.CylinderGeometry(.5,.5,1,10),cone:new T.ConeGeometry(.5,1,7),ring:new T.TorusGeometry(.5,.07,6,16)};this.textures=[];}
- mat(color,glow=0,metal=.1){const key=`${color}/${glow}/${metal}`;if(!this.mats.has(key))this.mats.set(key,new T.MeshStandardMaterial({color,roughness:.8,metalness:metal,flatShading:true,emissive:color,emissiveIntensity:glow}));return this.mats.get(key);}
+ mat(color,glow=0,metal=.1){const key=`${color}/${glow}/${metal}`;if(!this.mats.has(key))this.mats.set(key,new T.MeshLambertMaterial({color,flatShading:true,emissive:color,emissiveIntensity:glow}));return this.mats.get(key);}
  mesh(parent,type,x,y,z,w,h,d,color,glow=0,metal=.1){const m=new T.Mesh(this.geos[type],this.mat(color,glow,metal));m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=m.receiveShadow=true;parent.add(m);return m;}
  box(...a){return this.mesh(a[0],'box',...a.slice(1));}ball(...a){return this.mesh(a[0],'ball',...a.slice(1));}cyl(...a){return this.mesh(a[0],'cyl',...a.slice(1));}
  group(parent,x=0,y=0,z=0){const g=new T.Group();g.position.set(x,y,z);parent?.add(g);return g;}
@@ -43,6 +44,7 @@ export class Art {
    this.box(head,0,.2,.23,.5,.1,.15,'#3c3c3a');for(let i=0;i<8;i++)this.box(body,(i%3-1)*.18,-.32+Math.floor(i/3)*.24,.25,.035,.17,.035,glow,1.1);this.box(body,0,-.05,-.34,.8,1,.28,'#373838');
    for(let i=0;i<5;i++)this.cyl(body,(i-2)*.13,.75,-.35,.06,.85,.06,'#5a4743').rotation.z=(i-2)*.15;
   }
+  for(const part of [body,head,...arms,...legs])batchMeshes(part);
   root.userData={body,head,arms,legs,id};return root;
  }
 }
