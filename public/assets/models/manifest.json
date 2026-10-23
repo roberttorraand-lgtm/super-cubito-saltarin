@@ -1,0 +1,18 @@
+{
+  "author": "Turno Cero / original procedural sculpture",
+  "generator": "Blender 4.3",
+  "front": "+Z",
+  "up": "+Y",
+  "units": "metres",
+  "models": [
+    "prisma",
+    "welder",
+    "gold",
+    "ember"
+  ],
+  "clips": [
+    "Idle",
+    "Walk",
+    "Attack"
+  ]
+}

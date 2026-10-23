@@ -6,7 +6,7 @@ import {newWorld,newPlayer,playerMove,DT} from '/shared/simulation.js';
 import {hourAt,roomAt,interaction,cameras} from '/shared/world.js';
 const $=s=>document.querySelector(s),keys=new Set(),taps=new Set(),sound=new Sound();
 let scene;try{scene=new Scene($('#world'),$('#camera-feed'));}catch(error){$('#error').textContent='No se pudo iniciar el motor 3D. Prueba a actualizar el controlador gráfico.';console.error(error);}
-let socket,id=null,state={world:newWorld(),players:[],started:false},local=null,pending=[],seq=0,look={yaw:Math.PI/2,pitch:0},paused=false,last=performance.now(),acc=0,saved=null,loading=false,latestEvent=0,notice='',noticeUntil=0;
+let socket,id=null,state={world:newWorld(),players:[],started:false},local=null,pending=[],seq=0,look={yaw:Math.PI/2,pitch:0},paused=false,last=performance.now(),saved=null,loading=false,latestEvent=0,notice='',noticeUntil=0;
 let progress=campaignProgress(null),selectedNight=1,completedRun=false,progressWrite=Promise.resolve();
 const demo=newPlayer('demo','Guardia');demo.x=-10;demo.z=-7.3;demo.yaw=.9;
 const storage={async save(data){if(window.guardian)return window.guardian.save(data);localStorage.setItem('turno-cero.save',JSON.stringify(data));return true;},async load(){if(window.guardian)return window.guardian.load();try{return JSON.parse(localStorage.getItem('turno-cero.save'));}catch{return null;}}};
@@ -23,7 +23,9 @@ async function recordVictory(night){
 renderCampaign();
 const progressLoaded=(async()=>{try{const data=window.guardian?await window.guardian.loadProgress():JSON.parse(localStorage.getItem('turno-cero.campaign'));progress=campaignProgress(data);selectedNight=progress.unlocked;renderCampaign();}catch{}})();
 $('#relay').value=window.guardian?.relay??location.origin;$('#quit').hidden=!window.guardian;$('#continue').disabled=true;
-storage.load().then(data=>{saved=data;$('#continue').disabled=!data;}).catch(()=>{});
+storage.load().then(data=>{saved=data;$('#continue').disabled=!data||!scene?.loaded;}).catch(()=>{});
+for(const selector of ['#solo','#create','#join'])$(selector).disabled=true;
+scene?.ready.then(()=>{scene.loaded=true;$('#asset-state').textContent='Restaurante listo · Todos los recursos están en tu instalación.';for(const selector of ['#solo','#create','#join'])$(selector).disabled=false;$('#continue').disabled=!saved;}).catch(error=>{$('#asset-state').textContent='No se ha podido preparar el restaurante.';$('#error').textContent=error.message;});
 function info(text){notice=text;noticeUntil=performance.now()+5000;}
 function active(){return id&&state.started&&state.world.status==='playing'&&!paused;}
 function lock(){if(active()&&!local?.phone)$('#world').requestPointerLock?.();sound.start();}
@@ -33,6 +35,7 @@ function leave(){socket?.close();socket=null;id=null;local=null;pending=[];keys.
 async function connect(mode,code='',data=null){
  if(loading)return;const name=$('#name').value.trim();if(!name){$('#error').textContent='Escribe el nombre del guardia.';return;}loading=true;$('#error').textContent='Conectando…';sound.start();
  await progressLoaded;
+ try{if(!scene)throw Error('El motor 3D no está disponible.');await scene.ready;}catch(error){$('#error').textContent='No se han podido cargar los modelos 3D. '+error.message;loading=false;return;}
  try{const connection=connectGame(mode,code,$('#relay').value,{forceRelay:$('#link-mode').value==='relay'});socket=connection;$('#network').textContent=mode==='solo'?'INDIVIDUAL · LOCAL':'CONECTANDO CON EL ANFITRIÓN';
  const timer=setTimeout(()=>{if(!id&&socket===connection){connection.close();loading=false;$('#error').textContent='No se pudo contactar con el servidor.';}},45000);
  connection.addEventListener('open',()=>connection.send(JSON.stringify({type:'join',mode,name,code,save:data,night:selectedNight})));
@@ -63,15 +66,18 @@ addEventListener('mousemove',e=>{if(document.pointerLockElement===$('#world')&&a
 addEventListener('blur',()=>{keys.clear();taps.clear();if(id&&state.mode==='solo'&&!paused)setPause(true);});document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement)keys.clear();});
 function input(){const i={type:'input',seq:++seq,yaw:look.yaw,pitch:look.pitch,camera:selectedCamera,forward:keys.has('KeyW')||keys.has('ArrowUp'),back:keys.has('KeyS')||keys.has('ArrowDown'),left:keys.has('KeyA'),right:keys.has('KeyD'),run:keys.has('ShiftLeft')||keys.has('ShiftRight'),crouch:keys.has('KeyC'),interact:taps.has('KeyE'),phone:taps.has('Tab'),flashlight:taps.has('KeyF'),lure:taps.has('KeyG')};taps.clear();return i;}
 let view={x:demo.x,z:demo.z},lastPhone=false;
-function frame(now){const dt=Math.min(.08,(now-last)/1000);last=now;acc+=dt;
- if(active()&&local&&socket?.readyState===WebSocket.OPEN){while(acc>=DT){acc-=DT;const i=input();socket.send(JSON.stringify(i));pending.push(i);if(pending.length>90)pending.shift();local.input=i;playerMove(local,i,state.world);}}else{acc=0;taps.clear();}
+// Network/input cadence is independent of the drawing cadence. A slow frame
+// must not deliberately slow the client clock or turn one key press into a burst.
+let inputAt=performance.now(),inputAccumulator=0;
+setInterval(()=>{const now=performance.now();if(active()&&local&&socket?.readyState===WebSocket.OPEN){inputAccumulator=Math.min(DT*3,inputAccumulator+(now-inputAt)/1000);while(inputAccumulator>=DT){inputAccumulator-=DT;const i=input();socket.send(JSON.stringify(i));pending.push(i);if(pending.length>90)pending.shift();local.input=i;playerMove(local,i,state.world);}}else{inputAccumulator=0;taps.clear();}inputAt=now;},8);
+function frame(now){const dt=Math.min(.08,(now-last)/1000);last=now;
  let me=local??demo;if(local&&!local.alive)me=state.players.find(p=>p.alive)??local;
- if(Math.hypot(me.x-view.x,me.z-view.z)>2){view.x=me.x;view.z=me.z;}else{view.x+=(me.x-view.x)*(1-Math.exp(-22*dt));view.z+=(me.z-view.z)*(1-Math.exp(-22*dt));}
- const moving=active()&&(keys.has('KeyW')||keys.has('KeyS')||keys.has('KeyA')||keys.has('KeyD')||keys.has('ArrowUp')||keys.has('ArrowDown'));
+ const previousView={...view};if(Math.hypot(me.x-view.x,me.z-view.z)>2){view.x=me.x;view.z=me.z;}else{view.x+=(me.x-view.x)*(1-Math.exp(-22*dt));view.z+=(me.z-view.z)*(1-Math.exp(-22*dt));}
+ const moving=active()&&Math.hypot(view.x-previousView.x,view.z-previousView.z)>.0001&&(keys.has('KeyW')||keys.has('KeyS')||keys.has('KeyA')||keys.has('KeyD')||keys.has('ArrowUp')||keys.has('ArrowDown'));
  const shown={...me,x:view.x,z:view.z},phone=!!local?.phone&&active();$('#phone').hidden=!phone;if(phone&&!lastPhone)unlock();lastPhone=phone;
  const power=state.world.power;$('#power-warning').hidden=!id||(!power?.active&&!power?.warning);$('#power-warning').textContent=power?.active?`CORTE ELÉCTRICO · ${power.remaining} s · CÁMARAS Y RECARGA SIN SERVICIO`:'AVISO ELÉCTRICO · CORTE INMINENTE';$('#signal-lost').hidden=!power?.active;$('#phone').classList.toggle('no-signal',!!power?.active);
  scene?.draw(state,shown,{...look,crouch:keys.has('KeyC'),moving,run:keys.has('ShiftLeft')},dt,now/1000);
- if(scene){const m=scene.metrics;$('#performance').textContent=`${Math.round(m.fps??0)} FPS · ${m.width??0}×${m.height??0} · ${m.drawCalls??0} dibujos`;}
+ if(scene){const m=scene.metrics;$('#performance').textContent=`BABYLON · ${Math.round(m.fps??0)} FPS · ${m.width??0}×${m.height??0} · ${m.drawCalls??0} dibujos`;}
  if(id&&local){$('#clock').textContent=hourAt(state.world.elapsed);$('#phase').textContent=state.world.elapsed<120?'PREPARACIÓN':state.world.elapsed>=480?'NO BAJES LA GUARDIA':'TURNO NOCTURNO';$('#location').textContent=roomAt(me);$('#battery').textContent=`TELÉFONO ${Math.ceil(local.battery)}%`;$('#phone-battery').textContent=`${Math.ceil(local.battery)}%`;$('#lures').textContent=`LATAS ${local.lures} / 3`;$('#stamina').style.width=`${local.stamina}%`;const action=active()?interaction(local,state.world):null;$('#prompt').textContent=action?`E · ${action.label}${local.hidden&&state.world.elapsed-(local.hideSince??0)>nightRules(state.world.night).breathing-10?' · CUIDADO CON TU RESPIRACIÓN':''}`:'';$('#message').textContent=now<noticeUntil?notice:'';$('#spectator').hidden=local.alive;$('#capture').hidden=!active()||phone||!!document.pointerLockElement;$('#camera-label').textContent=cameras[selectedCamera].name;for(const b of $('#camera-buttons').children)b.classList.toggle('active',Number(b.dataset.camera)===selectedCamera);sound.update(state,me,moving,now/1000);}
  requestAnimationFrame(frame);
 }

@@ -1,0 +1,69 @@
+{
+  "platform": "Linux Chromium / SwiftShader; not Windows hardware",
+  "lineup": "Inspection fixture, rendered by the production Babylon scene",
+  "assets": [
+    {
+      "id": "welder",
+      "meshes": 64,
+      "clips": [
+        "Walk",
+        "Attack",
+        "Idle"
+      ],
+      "frame": 87.72600000008941
+    },
+    {
+      "id": "ember",
+      "meshes": 62,
+      "clips": [
+        "Walk",
+        "Attack",
+        "Idle"
+      ],
+      "frame": 87.72600000008941
+    },
+    {
+      "id": "gold",
+      "meshes": 65,
+      "clips": [
+        "Walk",
+        "Attack",
+        "Idle"
+      ],
+      "frame": 87.72600000008941
+    },
+    {
+      "id": "prisma",
+      "meshes": 66,
+      "clips": [
+        "Walk",
+        "Attack",
+        "Idle"
+      ],
+      "frame": 87.72600000008941
+    }
+  ],
+  "imported_idle_animation_advances": true,
+  "walk_blends_with_motion": true,
+  "normal_fps": 2,
+  "low_fps": 12.3,
+  "low_resolution": [
+    640,
+    400
+  ],
+  "metrics": {
+    "engine": "Babylon.js",
+    "fps": 11.614401858304289,
+    "drawCalls": 233,
+    "width": 640,
+    "height": 400,
+    "triangles": 74238
+  },
+  "attack_clip_plays": true,
+  "single_guard_low_fps": 9.3,
+  "six_live_camera_views": true,
+  "manual_save": true,
+  "movement_and_input_cadence": true,
+  "external_asset_requests": [],
+  "errors": []
+}

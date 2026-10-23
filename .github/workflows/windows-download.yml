@@ -38,7 +38,7 @@ jobs:
       - name: Preparar descarga ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: TurnoCero-Windows-x64
+          name: TurnoCero-0.5-Windows-x64
           path: dist/Turno Cero-win32-x64/
           if-no-files-found: error
           retention-days: 14

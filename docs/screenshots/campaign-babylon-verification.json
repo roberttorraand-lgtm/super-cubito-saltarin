@@ -1,0 +1,29 @@
+{
+  "clock": "Normal gameplay clock; near-dawn saves accelerate test setup.",
+  "platform": "Linux Chromium / SwiftShader, not Windows hardware",
+  "nights": [
+    {
+      "night": 1,
+      "victory_unlock_persisted": true
+    },
+    {
+      "night": 2,
+      "victory_unlock_persisted": true
+    },
+    {
+      "night": 3,
+      "victory_unlock_persisted": true
+    },
+    {
+      "night": 4,
+      "victory_unlock_persisted": true
+    },
+    {
+      "night": 5,
+      "victory_unlock_persisted": true
+    }
+  ],
+  "blackout_and_recovery": true,
+  "host_night_shared_with_guest": true,
+  "page_errors": []
+}

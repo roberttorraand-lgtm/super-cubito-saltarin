@@ -25,12 +25,12 @@ with sync_playwright() as pw:
         p=browser.new_page(viewport={'width':1440,'height':900});p.add_init_script("const Native=RTCPeerConnection;window.__iceCount=0;window.RTCPeerConnection=class extends Native{constructor(...a){super(...a);this.addEventListener('icecandidate',e=>{if(e.candidate)window.__iceCount++});}};");p.on('pageerror',lambda e:errors.append(str(e)));p.goto(url,wait_until='networkidle');p.fill('#name',name);return p
     # Measure just one client and capture the real UI, not a mock-up.
     with broker() as (_,url):
-        p=page(url,'Guardia');p.wait_for_timeout(500);p.screenshot(path=str(SHOTS/'v0.3-menu.png'))
+        p=page(url,'Guardia');p.wait_for_timeout(500);p.screenshot(path=str(SHOTS/'v0.5-menu.png'))
         p.locator('details summary').first.click();p.check('#show-fps');p.select_option('#quality','normal');p.locator('details summary').first.click()
         p.click('#solo');p.wait_for_selector('#ready',state='visible');p.click('#start');p.wait_for_selector('#ready',state='hidden');p.wait_for_timeout(1500)
-        report['single_normal_fps']=fps(p);p.screenshot(path=str(SHOTS/'v0.3-seguridad.png'))
-        p.keyboard.press('Tab');p.wait_for_selector('#phone',state='visible');p.click('[data-camera="1"]');p.wait_for_timeout(500);p.screenshot(path=str(SHOTS/'v0.3-camaras.png'));p.keyboard.press('Tab');p.wait_for_selector('#phone',state='hidden')
-        p.evaluate("()=>{const q=document.querySelector('#quality');q.value='low';q.dispatchEvent(new Event('change'));}");p.wait_for_timeout(500);report['single_low_fps']=fps(p);p.screenshot(path=str(SHOTS/'v0.3-ligero.png'));print(json.dumps(report),flush=True)
+        report['single_normal_fps']=fps(p);p.screenshot(path=str(SHOTS/'v0.5-seguridad.png'))
+        p.keyboard.press('Tab');p.wait_for_selector('#phone',state='visible');p.click('[data-camera="1"]');p.wait_for_timeout(500);p.screenshot(path=str(SHOTS/'v0.5-camaras.png'));p.keyboard.press('Tab');p.wait_for_selector('#phone',state='hidden')
+        p.evaluate("()=>{const q=document.querySelector('#quality');q.value='low';q.dispatchEvent(new Event('change'));}");p.wait_for_timeout(500);report['single_low_fps']=fps(p);p.screenshot(path=str(SHOTS/'v0.5-ligero.png'));print(json.dumps(report),flush=True)
         p.close()
     # Direct connection: the broker can go away without stopping the simulation.
     with broker() as (proc,url):
@@ -40,7 +40,7 @@ with sync_playwright() as pw:
         direct='DIRECTA' in guest.locator('#network').text_content()
         host.wait_for_function("()=>!document.querySelector('#start').disabled");host.click('#start');guest.wait_for_selector('#ready',state='hidden');guest.keyboard.down('KeyW');guest.wait_for_timeout(650);guest.keyboard.up('KeyW')
         assert health(url)['simulationRooms']==0
-        host.screenshot(path=str(SHOTS/'v0.3-cooperativo.png'))
+        host.screenshot(path=str(SHOTS/'v0.5-cooperativo.png'))
         host.keyboard.press('Escape');host.click('#save');host.wait_for_function("()=>document.querySelector('#save-status').textContent.includes('guardada')");host.click('#resume')
         if direct:
             before=guest.locator('#clock').text_content();proc.stdin.write('cut\n');proc.stdin.flush();guest.wait_for_timeout(3000)
@@ -61,6 +61,6 @@ with sync_playwright() as pw:
         report['relay_keeps_simulation_on_host']=True
         host.close();guest.wait_for_selector('#menu',state='visible');guest.close()
     assert not errors,errors
-    report['page_errors']=errors;report['screenshots']=[p.name for p in SHOTS.glob('v0.3-*.png')]
-    (SHOTS/'verification.json').write_text(json.dumps(report,indent=2),encoding='utf8')
+    report['page_errors']=errors;report['screenshots']=[p.name for p in SHOTS.glob('v0.5-*.png')]
+    (SHOTS/'hosted-babylon-verification.json').write_text(json.dumps(report,indent=2),encoding='utf8')
     print(json.dumps(report));browser.close()

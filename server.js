@@ -4,17 +4,18 @@ import {randomBytes,randomUUID} from 'node:crypto';
 import {WebSocketServer,WebSocket} from 'ws';
 import {attachSignaling} from './signaling.js';
 import {newWorld,newPlayer,step,snapshot,restore,DT} from './shared/simulation.js';
-const files=new Map([['/shared/nights.js',['shared/nights.js','text/javascript']],['/retro-light.js',['public/retro-light.js','text/javascript']],['/batch.js',['public/batch.js','text/javascript']],['/transport.js',['public/transport.js','text/javascript']],['/host-worker.js',['public/host-worker.js','text/javascript']],['/shared/host-session.js',['shared/host-session.js','text/javascript']],
+const files=new Map([['/shared/nights.js',['shared/nights.js','text/javascript']],['/lighting.js',['public/lighting.js','text/javascript']],['/environment.js',['public/environment.js','text/javascript']],['/transport.js',['public/transport.js','text/javascript']],['/host-worker.js',['public/host-worker.js','text/javascript']],['/shared/host-session.js',['shared/host-session.js','text/javascript']],
  ['/',['public/index.html','text/html']],['/style.css',['public/style.css','text/css']],['/app.js',['public/app.js','text/javascript']],['/scene.js',['public/scene.js','text/javascript']],['/models.js',['public/models.js','text/javascript']],['/sound.js',['public/sound.js','text/javascript']],
  ['/shared/world.js',['shared/world.js','text/javascript']],['/shared/simulation.js',['shared/simulation.js','text/javascript']],
- ['/vendor/three.module.js',['node_modules/three/build/three.module.min.js','text/javascript']],['/vendor/three.core.min.js',['node_modules/three/build/three.core.min.js','text/javascript']],
+ ['/vendor/babylon.js',['node_modules/babylonjs/babylon.js','text/javascript']],['/vendor/babylon-loaders.js',['node_modules/babylonjs-loaders/babylonjs.loaders.min.js','text/javascript']],
 ]);
 export function createGameServer({allowSolo=true}={}){
  const server=http.createServer(async(req,res)=>{let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{res.writeHead(400);return res.end();}
   const headers={'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"};
-  if(path==='/health'){res.writeHead(200,{...headers,'Content-Type':'application/json'});return res.end(JSON.stringify({ok:true,version:'0.4.0',game:'turno-cero',simulationRooms:rooms.size,linkRooms:signaling.rooms.size}));}
-  const file=files.get(path);if(!file){res.writeHead(404,headers);return res.end('No encontrado');}
-  try{const data=await readFile(new URL(file[0],import.meta.url));res.writeHead(200,{...headers,'Content-Type':file[1]+'; charset=utf-8'});res.end(data);}catch{res.writeHead(500,headers);res.end('No se pudo cargar el juego.');}
+  if(path==='/health'){res.writeHead(200,{...headers,'Content-Type':'application/json'});return res.end(JSON.stringify({ok:true,version:'0.5.0',game:'turno-cero',simulationRooms:rooms.size,linkRooms:signaling.rooms.size}));}
+  const asset=/^\/assets\/(models\/(prisma|welder|gold|ember)\.glb|textures\/(tile|plaster|steel|wood|fabric|rubber|enamel)(-normal)?\.png)$/.test(path);
+  const file=files.get(path)??(asset?['public'+path,path.endsWith('.glb')?'model/gltf-binary':'image/png']:null);if(!file){res.writeHead(404,headers);return res.end('No encontrado');}
+  try{const data=await readFile(new URL(file[0],import.meta.url));res.writeHead(200,{...headers,'Content-Type':file[1]+(file[1].startsWith('text/')?'; charset=utf-8':'')});res.end(data);}catch{res.writeHead(500,headers);res.end('No se pudo cargar el juego.');}
  });
  const rooms=new Map(),wss=new WebSocketServer({noServer:true,maxPayload:160000}),signaling=attachSignaling(server);
  server.on('upgrade',(req,socket,head)=>{let path;try{path=new URL(req.url,'http://localhost').pathname;}catch{return socket.destroy();}if(path==='/ws')wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,req));else if(path!=='/signal')socket.destroy();});

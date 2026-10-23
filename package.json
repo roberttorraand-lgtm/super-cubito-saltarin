@@ -1,6 +1,6 @@
 {
   "name": "turno-cero",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,8 @@
     "node": ">=22"
   },
   "dependencies": {
-    "three": "0.180.0",
+    "babylonjs": "9.32.0",
+    "babylonjs-loaders": "9.32.0",
     "ws": "8.22.0"
   },
   "devDependencies": {
