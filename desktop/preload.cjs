@@ -1,0 +1,2 @@
+const {contextBridge,ipcRenderer}=require('electron');
+contextBridge.exposeInMainWorld('guardian',{desktop:true,relay:'https://super-cubito-saltarin.onrender.com',save:data=>ipcRenderer.invoke('save',data),load:()=>ipcRenderer.invoke('load'),fullscreen:()=>ipcRenderer.invoke('fullscreen'),quit:()=>ipcRenderer.invoke('quit')});

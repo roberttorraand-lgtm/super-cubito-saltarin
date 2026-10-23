@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     numInstances: 1
-    buildCommand: npm ci --no-fund
+    buildCommand: npm ci --omit=dev --ignore-scripts --no-fund && npm test
     startCommand: npm start
     healthCheckPath: /health
     envVars:

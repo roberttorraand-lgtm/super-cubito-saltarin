@@ -1,13 +1,27 @@
 {
-  "name": "nuevo-juego",
-  "version": "0.1.0",
+  "name": "turno-cero",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "desktop": "electron .",
+    "test": "node --test",
+    "package:win": "node scripts/package.mjs win32",
+    "package:linux": "node scripts/package.mjs linux"
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "dependencies": {
+    "three": "0.180.0",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "18.3.6",
+    "electron": "39.2.7"
+  },
+  "description": "Terror cooperativo en primera persona · Brasa Burger",
+  "main": "desktop/main.cjs"
 }
