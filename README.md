@@ -80,7 +80,7 @@ npm run desktop
 npm run package:win
 ```
 
-Genera `dist/Turno Cero-win32-x64`. El empaquetado descarga el runtime oficial de Electron y necesita conexión a Internet. `npm run package:linux` permite generar otra plataforma. No hay flujos de publicación automática ni subidas de binarios en este repositorio.
+Genera `dist/Turno Cero-win32-x64`. El empaquetado descarga el runtime oficial de Electron y necesita conexión a Internet. `npm run package:linux` permite generar otra plataforma. La descarga del ejecutable se prepara en GitHub Actions mediante `.github/workflows/windows-download.yml`. Abre Actions → Descargar juego para Windows → última ejecución correcta → Artifacts → TurnoCero-Windows-x64. GitHub exige iniciar sesión para descargar artefactos. Duran 14 días; el botón Run workflow permite generar otro. La primera compilación se inicia al añadir el flujo a main; las siguientes se solicitan manualmente. El trabajo ejecuta las pruebas y empaqueta en Windows, pero no abre el juego ni mide FPS. No publica releases.
 
 La aplicación usa aislamiento de contexto, sandbox y una interfaz de preload limitada a guardar/cargar, pantalla completa y salir. Las páginas no tienen acceso a Node.js; las nuevas ventanas y la navegación externa están bloqueadas. No requiere claves, base de datos ni recursos gráficos externos durante la partida.
 

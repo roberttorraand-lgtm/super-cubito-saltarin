@@ -1,0 +1,45 @@
+name: Descargar juego para Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-download.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    name: Preparar Windows 10 y 11
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar dependencias
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Comprobar el juego
+        run: npm test
+      - name: Crear programa portable
+        run: npm run package:win
+      - name: Comprobar el ejecutable y sus recursos
+        shell: pwsh
+        run: |
+          if (!(Test-Path 'dist/Turno Cero-win32-x64/TurnoCero.exe')) { throw 'Falta el ejecutable' }
+          if (!(Test-Path 'dist/Turno Cero-win32-x64/resources/app.asar')) { throw 'Faltan los recursos' }
+      - name: Preparar descarga ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: TurnoCero-Windows-x64
+          path: dist/Turno Cero-win32-x64/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 6
